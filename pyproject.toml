@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ganresearch"
+version = "0.1"
+description = "GAN Research"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Nguyễn Mậu Trường Giang", email = "giangnmt98@gmail.com" }
+]
+dependencies = [
+    "torch==2.5.0",
+    "torchvision==0.20.0",
+    "torchaudio==2.5.0",
+    "scikit-learn==1.5.2",
+    "matplotlib==3.9.2",
+    "scipy==1.14.1",
+    "tqdm==4.66.5",
+    "pillow==10.4.0",
+    "numpy==2.1.1",
+    # Add other dependencies from requirements.txt
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==24.8.0",
+    "flake8==7.1.1",
+    "pylint==3.2.7",
+    "mypy==1.11.2",
+    "isort==5.13.2",
+    "types-PyYAML==6.0.12.12",
+    "pre-commit==3.4.0",
+    "pytest==7.4.2",
+    "colorlog==6.8.2"
+    # Add other dev dependencies here
+]
+
+[tool.setuptools]
+packages = ["ganresearch"]
