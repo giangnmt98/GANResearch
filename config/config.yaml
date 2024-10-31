@@ -20,10 +20,10 @@ model:
 training:
   device: "cuda"               # Device to use ("cuda" or "cpu")
   list_gpus: [0]               # List of GPU devices to use
-  optimizer: "adamw"           # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
+  optimizer: "adam"           # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
   batch_size: 32               # Batch size
   noise_dimension: 128         # Size of noise vector
-  learning_rate: 0.0002        # Learning rate
+  learning_rate: 0.00001        # Learning rate
   beta1: 0.5                   # Beta1 parameter for Adam optimizer
   num_epochs: 10               # Number of epochs
   save_interval: 100           # Save model every n iterations

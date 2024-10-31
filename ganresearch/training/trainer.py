@@ -170,7 +170,7 @@ class Trainer:
         plt.legend()
         plt.title("Training Loss over Epochs")
 
-        save_path = self.config["gan_model"]["save_model_path"]
+        save_path = self.config["model"]["save_path"]
         os.makedirs(save_path, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         plt.savefig(f"{save_path}/{timestamp}_loss.png")
@@ -181,7 +181,7 @@ class Trainer:
         """
         Lưu các mô hình generator và discriminator vào đĩa.
         """
-        save_path = self.config["gan_model"]["save_model_path"]
+        save_path = self.config["model"]["save_path"]
         os.makedirs(save_path, exist_ok=True)
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
