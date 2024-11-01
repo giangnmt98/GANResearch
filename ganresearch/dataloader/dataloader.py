@@ -5,6 +5,7 @@ A module for managing datasets and DataLoaders for GAN research using PyTorch.
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+
 from ganresearch.datasets import datasets
 from ganresearch.utils.utils import create_logger
 
@@ -118,7 +119,12 @@ class DataLoaderManager:
             Returns:
                 tuple: Processed images and labels.
             """
-            transform = transforms.Resize((self.config["dataset"]["image_size"], self.config["dataset"]["image_size"]))
+            transform = transforms.Resize(
+                (
+                    self.config["dataset"]["image_size"],
+                    self.config["dataset"]["image_size"],
+                )
+            )
             images, labels = zip(*batch)
             images = [transform(image) for image in images]
             images = torch.stack(images, 0)

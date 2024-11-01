@@ -29,7 +29,7 @@ class BaseDataLoaderConfig:
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.transform = transform
-        self.config=config
+        self.config = config
 
     def get_dataloader(self, dataset):
         """
@@ -46,7 +46,9 @@ class BaseDataLoaderConfig:
         if len(select_class_id) > 0:
             logger.info(f"Class list extracted from DataLoader: {select_class_id}")
             # Chọn chỉ số của các mẫu thuộc lớp mong muốn
-            indices = [i for i, (_, label) in enumerate(dataset) if label in select_class_id]
+            indices = [
+                i for i, (_, label) in enumerate(dataset) if label in select_class_id
+            ]
 
             # Tạo một `Subset` dataset chỉ với các mẫu thuộc lớp mong muốn
             filtered_dataset = Subset(dataset, indices)
@@ -160,10 +162,9 @@ class GTSRBDataset(BaseDataLoaderConfig):
         Returns:
             datasets.GTSRB: The initialized GTSRB dataset.
         """
-        dataset = datasets.GTSRB(
-            root=root, download=True, transform=self.transform
-        )
+        dataset = datasets.GTSRB(root=root, download=True, transform=self.transform)
         return self.select_class_id(dataset)
+
 
 class Flowers102Dataset(BaseDataLoaderConfig):
     def __init__(self, root="./data", train=True, **kwargs):
@@ -189,6 +190,7 @@ class Flowers102Dataset(BaseDataLoaderConfig):
             root=root, download=True, transform=self.transform
         )
         return self.select_class_id(dataset)
+
 
 class ImageNetDataset(BaseDataLoaderConfig):
     def __init__(self, root="./data", split="train", **kwargs):

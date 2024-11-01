@@ -1,43 +1,44 @@
 # Dataset Configuration
 dataset:
-  type: "cifar10"              # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, custom)
-  data_path: "./data"          # Data path
+  type: "cifar10"               # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, custom)
+  data_path: "./data"           # Data path
   image_size: 64                # Image size after resize
-  channels: 3                  # Number of image channels(mnist: 1, cifar10: 3, ...)
-  select_class_id: []  # Select class id for custom dataset
-  split_ratio:                 # Train/validation/test split ratios
-    train: 0.8
+  channels: 3                   # Number of image channels (mnist: 1, cifar10: 3, ...)
+  select_class_id: []           # Select class id for custom dataset
+  num_classes: 10               # Number of classes (mnist: 10, cifar10: 10, ...)
+  split_ratio:                  # Train/validation/test split ratios
+    train: 0.1
     validation: 0.1
     test: 0.1
 
-
 # GAN Model Configuration
 model:
-  name: "dcgan"                # GAN model type ("dcgan", "wgan", "basic_gan")
-  save_path: "./experiments"        # Path to save the model
-  load_pretrained: False       # Load pretrained model?
+  name: "cgan"                  # GAN model type ("dcgan", "wgan_gp", "cgan")
+  save_path: "./experiments"    # Path to save the model
+  load_pretrained: False        # Load pretrained model?
 
 # Training Configuration
 training:
-  device: "cuda"               # Device to use ("cuda" or "cpu")
-  number_gpu: 1               # Number of GPUs to use
-  optimizer: "adam"           # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
-  batch_size: 64               # Batch size
-  noise_dimension: 128         # Size of noise vector
-  latent_dim: 100              # Size of latent dimension
-  ngf: 64                      # Generator feature map size
-  ndf: 64                      # Discriminator feature map size
-  learning_rate: 0.0002       # Learning rate
-  beta1: 0.5                   # Beta1 parameter for Adam optimizer
-  num_epochs: 25               # Number of epochs
-  save_interval: 1            # Save model every n iterations
-  early_stop: False            # Enable early stopping?
-  patience: 5                  # Patience for early stopping
-  save_loss: True              # Save loss history?
-  log_interval: 100            # Log interval
-  use_lecam: False             # Use LeCam regularizer?
-  lecam_ratio: 0.001            # LeCam regularizer ratio
-  init_ema: 100              # Init EMA value when start
-  decay_ema: 0.999           # EMA decay rate
-  start_epoch_ema: 100   # Start EMA after n epochs
-
+  device: "cuda"                 # Device to use ("cuda" or "cpu")
+  number_gpu: 1                  # Number of GPUs to use
+  optimizer: "adam"              # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
+  batch_size: 64                 # Batch size
+  noise_dimension: 128           # Size of noise vector
+  latent_dim: 100                # Size of latent dimension
+  ngf: 64                        # Generator feature map size
+  ndf: 64                        # Discriminator feature map size
+  learning_rate: 0.0002          # Learning rate
+  beta1: 0.5                     # Beta1 parameter for Adam optimizer
+  num_epochs: 1                  # Number of epochs
+  save_interval: 1               # Save model every n iterations
+  early_stop: False              # Enable early stopping?
+  patience: 5                    # Patience for early stopping
+  save_loss: True                # Save loss history?
+  log_interval: 10               # Log interval
+  use_lecam: False               # Use LeCam regularizer?
+  lecam_ratio: 0.001             # LeCam regularizer ratio
+  init_ema: 100                  # Init EMA value when start
+  decay_ema: 0.999               # EMA decay rate
+  start_epoch_ema: 100           # Start EMA after n epochs
+  n_critic: 5                    # Number of critic updates per generator update (only for WGAN)
+  lambda_gp: 1                   # Gradient penalty coefficient (only for WGAN)

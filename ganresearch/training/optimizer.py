@@ -1,42 +1,55 @@
+"""
+Module for creating and managing optimizers for machine learning models.
+"""
+
 import torch.optim as optim
 
 
 class Optimizer:
     def __init__(self, config):
         """
-        Khởi tạo Optimizer với config.
+        Initialize the Optimizer with a given configuration.
 
         Args:
-            config (dict): Cấu hình chứa các tham số cho optimizer.
+            config (dict): Configuration containing parameters for the optimizer.
         """
         self.config = config
 
     def create(self, model_params):
         """
-        Tạo optimizer dựa trên thuật toán được chỉ định trong config.
+        Create an optimizer based on the algorithm specified in the configuration.
 
         Args:
-            model_params (iterable): Tham số của mô hình (generator hoặc discriminator).
+            model_params (iterable): Parameters of the model (generator or discriminator).
 
         Returns:
-            torch.optim.Optimizer: Optimizer cho mô hình.
+            torch.optim.Optimizer: Optimizer for the model.
+
+        Raises:
+            ValueError: If the optimizer type specified in the config is not supported.
         """
         optimizer_type = self.config["training"].get("optimizer", "adam").lower()
 
+        # Creating Adam optimizer if specified in config
         if optimizer_type == "adam":
             return optim.Adam(
                 model_params,
                 lr=self.config["training"]["learning_rate"],
                 betas=(self.config["training"]["beta1"], 0.999),
             )
+        # Creating RMSprop optimizer if specified in config
         elif optimizer_type == "rmsprop":
             return optim.RMSprop(
                 model_params, lr=self.config["training"]["learning_rate"]
             )
+        # Creating SGD optimizer if specified in config
         elif optimizer_type == "sgd":
             return optim.SGD(
-                model_params, lr=self.config["training"]["learning_rate"], momentum=0.9
+                model_params,
+                lr=self.config["training"]["learning_rate"],
+                momentum=0.9
             )
+        # Creating AdamW optimizer if specified in config
         elif optimizer_type == "adamw":
             return optim.AdamW(
                 model_params,
@@ -44,4 +57,5 @@ class Optimizer:
                 betas=(self.config["training"]["beta1"], 0.999),
             )
         else:
-            raise ValueError(f"Optimizer `{optimizer_type}` không được hỗ trợ.")
+            # Raise error if the optimizer type is not supported
+            raise ValueError(f"Optimizer `{optimizer_type}` not supported.")
