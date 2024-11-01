@@ -1,32 +1,43 @@
 # Dataset Configuration
 dataset:
-  type: "cifar10"              # Dataset type ("mnist", "custom", "cifar10", ...)
+  type: "cifar10"              # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, custom)
   data_path: "./data"          # Data path
   image_size: 64                # Image size after resize
   channels: 3                  # Number of image channels(mnist: 1, cifar10: 3, ...)
-  split_dataset: true          # Split dataset into train/val/test?
+  select_class_id: []  # Select class id for custom dataset
   split_ratio:                 # Train/validation/test split ratios
-    train: 0.7
-    validation: 0.2
+    train: 0.8
+    validation: 0.1
     test: 0.1
+
 
 # GAN Model Configuration
 model:
   name: "dcgan"                # GAN model type ("dcgan", "wgan", "basic_gan")
-  save_path: "./models"        # Path to save the model
+  save_path: "./experiments"        # Path to save the model
   load_pretrained: False       # Load pretrained model?
 
 # Training Configuration
 training:
   device: "cuda"               # Device to use ("cuda" or "cpu")
-  list_gpus: [0]               # List of GPU devices to use
+  number_gpu: 1               # Number of GPUs to use
   optimizer: "adam"           # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
-  batch_size: 32               # Batch size
+  batch_size: 64               # Batch size
   noise_dimension: 128         # Size of noise vector
-  learning_rate: 0.00001        # Learning rate
+  latent_dim: 100              # Size of latent dimension
+  ngf: 64                      # Generator feature map size
+  ndf: 64                      # Discriminator feature map size
+  learning_rate: 0.0002       # Learning rate
   beta1: 0.5                   # Beta1 parameter for Adam optimizer
-  num_epochs: 10               # Number of epochs
-  save_interval: 100           # Save model every n iterations
+  num_epochs: 25               # Number of epochs
+  save_interval: 1            # Save model every n iterations
   early_stop: False            # Enable early stopping?
   patience: 5                  # Patience for early stopping
   save_loss: True              # Save loss history?
+  log_interval: 100            # Log interval
+  use_lecam: False             # Use LeCam regularizer?
+  lecam_ratio: 0.001            # LeCam regularizer ratio
+  init_ema: 100              # Init EMA value when start
+  decay_ema: 0.999           # EMA decay rate
+  start_epoch_ema: 100   # Start EMA after n epochs
+

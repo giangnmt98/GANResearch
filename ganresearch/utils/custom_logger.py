@@ -53,7 +53,7 @@ class CustomLogger:
                 )
             else:
                 formatter = colorlog.ColoredFormatter(
-                    "%(log_color)s%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                    "%(log_color)s%(asctime)s - %(name)s - %(message)s",
                     log_colors=log_colors,
                 )
             # Handler to log to console

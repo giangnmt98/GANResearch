@@ -1,50 +1,5 @@
-# import argparse
-#
-# from ganresearch.training.trainer import Trainer
-#
-# from ganresearch.dataloader.dataloader import DataLoaderManager
-# # from evaluation.fid_score import FIDScore
-# from ganresearch.models.gan_factory import GANFactory
-# from ganresearch.utils.utils import load_config
-#
-#
-# def main(config):
-#
-#     # Chuẩn bị DataLoader
-#     dataloader_manager = DataLoaderManager(config)
-#     train_loader, val_loader, _ = dataloader_manager.get_dataloaders()
-#     # Khởi tạo mô hình
-#     gan_factory = GANFactory(config)
-#     gan_model = gan_factory.create_model_gan()
-#
-#     # Khởi tạo Trainer với mô hình và DataLoader
-#     trainer = Trainer(gan_model, config, train_loader, val_loader)
-#
-#     # Bắt đầu huấn luyện với Early Stopping và lưu biểu đồ loss
-#     trainer.train()
-#
-#     # # Đánh giá bằng FID Score
-#     # fid = FIDScore(real_images=[], generated_images=[])
-#     # fid_score = fid.get_fid_scores()
-#     # print(f"FID Score: {fid_score}")
-#
-#
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(description="GAN Training and Evaluation")
-#     parser.add_argument(
-#         "--config", type=str, default="config/config.yaml", help="Path to config file"
-#     )
-#     args = parser.parse_args()
-#
-#     # Đọc file config
-#     config = load_config(args.config)
-#     # Chạy chương trình chính
-#     main(config)
-
-
 import os
 import random
-import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
@@ -52,7 +7,6 @@ import torchvision.datasets as dset
 from torch.utils.data import DataLoader, random_split, Subset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
-from torchvision import  models
 import numpy as np
 from scipy.linalg import sqrtm
 import matplotlib.pyplot as plt
@@ -72,7 +26,7 @@ class Config:
         self.niter = 1
         self.lr = 0.0002
         self.beta1 = 0.5
-        self.lecam_ratio = 0.1
+        self.lecam_ratio = 0.00001
         self.use_lecam = False
         self.cuda = torch.cuda.is_available()
         self.ngpu = 1
@@ -94,7 +48,7 @@ def initialize():
     return device
 
 class ema_losses:
-    def __init__(self, init=1000., decay=0.9, start_itr=0):
+    def __init__(self, init=1000., decay=0.9, start_itr=1000):
         self.G_loss = init
         self.D_loss_real = init
         self.D_loss_fake = init
@@ -405,44 +359,114 @@ def extract_class_features(loader, model, class_id, generator=None):
   return np.concatenate(features, axis=0)
 
 # Compare FID scores per class
-def compare_fid_scores(test_loader, generator_balanced, generator_imbalanced, imbalance_ratios):
-  # Initialize the Inception-v3 model for feature extraction
-  from torchvision.models import Inception_V3_Weights
+import torch
+import pandas as pd
+from torchvision import models
+from torchvision.models import Inception_V3_Weights
 
-  inception = models.inception_v3(weights=Inception_V3_Weights.IMAGENET1K_V1, transform_input=False).to(device)
-  inception.fc = torch.nn.Identity()  # Replace the FC layer
 
-  fid_data = []
+def calculate_inception_score(images, inception_model, splits=10):
+    """
+    Calculate the Inception Score (IS) for a set of generated images.
 
-  for class_id in range(10):  # Assuming CIFAR-10 has 10 classes
-      print(f"Processing class {class_id}...")
+    Args:
+        images (list of Tensor): List of generated images.
+        inception_model (nn.Module): Pre-trained Inception model.
+        splits (int): Number of splits for calculating IS.
 
-      # Extract real features for the current class
-      real_features = extract_class_features(test_loader, inception, class_id)
+    Returns:
+        tuple: Mean and standard deviation of the Inception Score.
+    """
+    preds = []
 
-      # Extract fake features from the balanced and imbalanced generators
-      fake_features_balanced = extract_class_features(test_loader, inception, class_id, generator_balanced)
-      fake_features_imbalanced = extract_class_features(test_loader, inception, class_id, generator_imbalanced)
+    with torch.no_grad():
+        for img in images:
+            # Ensure image is resized and has correct dimensions for Inception (batch_size, 3, 299, 299)
+            if img.dim() == 3:  # If img has shape (3, H, W)
+                img = img.unsqueeze(0)  # Add batch dimension
+            img = F.interpolate(img, size=(299, 299), mode='bilinear', align_corners=False)  # Resize for Inception
+            pred = F.softmax(inception_model(img), dim=1).cpu().numpy()
+            preds.append(pred)
 
-      # Calculate FID scores
-      fid_balanced = calculate_fid(real_features, fake_features_balanced)
-      fid_imbalanced = calculate_fid(real_features, fake_features_imbalanced)
+    preds = np.concatenate(preds, axis=0)
 
-      # Store results for this class
-      fid_data.append({
-          "Class": class_id,
-          "FID (Balanced)": fid_balanced,
-          "FID (Imbalanced)": fid_imbalanced,
-          "FID (Imbalanced) - FID (Balanced)": fid_imbalanced - fid_balanced
-      })
+    # Calculate Inception Score in splits
+    split_scores = []
+    for k in range(splits):
+        part = preds[k * (len(preds) // splits): (k + 1) * (len(preds) // splits)]
+        p_yx = part.mean(axis=0)
+        split_score = np.exp(np.mean([np.sum(p * (np.log(p) - np.log(p_yx))) for p in part]))
+        split_scores.append(split_score)
 
-  # Display the results
-  import pandas as pd
-  df = pd.DataFrame(fid_data)
-  df["Imbalance Ratio"] = df["Class"].map(imbalance_ratios)
-  print(df)
+    return np.mean(split_scores), np.std(split_scores)
 
-  return df
+
+def compare_fid_and_is_scores(test_loader, generator_balanced, generator_imbalanced, imbalance_ratios, num_classes=None):
+    """
+    Compare FID and IS scores for each class between balanced and imbalanced generators across different datasets.
+
+    Args:
+        test_loader (DataLoader): DataLoader containing the test dataset.
+        generator_balanced (nn.Module): GAN generator trained on balanced data.
+        generator_imbalanced (nn.Module): GAN generator trained on imbalanced data.
+        imbalance_ratios (dict): A dictionary mapping class IDs to imbalance ratios.
+        num_classes (int, optional): Number of classes in the dataset. If None, it will be inferred from imbalance_ratios.
+
+    Returns:
+        DataFrame: A DataFrame containing FID and IS scores and differences per class.
+    """
+    if num_classes is None:
+        num_classes = len(imbalance_ratios)
+
+    # Initialize Inception model for feature extraction and scoring
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    inception = models.inception_v3(weights=Inception_V3_Weights.IMAGENET1K_V1, transform_input=False).to(device)
+    inception.fc = torch.nn.Identity()  # Replace the FC layer for feature extraction
+
+    fid_is_data = []
+
+    for class_id in range(num_classes):
+        print(f"Processing class {class_id}...")
+
+        # Extract real features for FID calculation
+        real_features = extract_class_features(test_loader, inception, class_id)
+
+        # Extract fake features for FID calculation
+        fake_features_balanced = extract_class_features(test_loader, inception, class_id, generator_balanced)
+        fake_features_imbalanced = extract_class_features(test_loader, inception, class_id, generator_imbalanced)
+
+        # Calculate FID scores
+        fid_balanced = calculate_fid(real_features, fake_features_balanced)
+        fid_imbalanced = calculate_fid(real_features, fake_features_imbalanced)
+
+        # Generate images for IS calculation
+        balanced_images = [generator_balanced(torch.randn(1, opt.nz, 1, 1, device=device)) for _ in range(100)]
+        imbalanced_images = [generator_imbalanced(torch.randn(1, opt.nz, 1, 1, device=device)) for _ in range(100)]
+
+        # Calculate IS scores
+        is_balanced, is_balanced_std = calculate_inception_score(balanced_images, inception)
+        is_imbalanced, is_imbalanced_std = calculate_inception_score(imbalanced_images, inception)
+
+        # Store FID and IS data for this class
+        fid_is_data.append({
+            "Class": class_id,
+            "FID (Balanced)": fid_balanced,
+            "FID (Imbalanced)": fid_imbalanced,
+            "FID Difference": fid_imbalanced - fid_balanced,
+            "IS (Balanced)": is_balanced,
+            "IS Std (Balanced)": is_balanced_std,
+            "IS (Imbalanced)": is_imbalanced,
+            "IS Std (Imbalanced)": is_imbalanced_std,
+            "IS Difference": is_imbalanced - is_balanced,
+            "Imbalance Ratio": imbalance_ratios.get(class_id, "N/A")
+        })
+
+    # Create a DataFrame to display the results
+    df = pd.DataFrame(fid_is_data)
+    print(df)
+
+    return df
+
 
 def run_train(data_loader, ema_losses, device):
     discriminator = Discriminator(opt.ngpu).to(device)
@@ -476,4 +500,4 @@ if __name__ == "__main__":
 
     generator_imbalanced = run_train(train_loader_imbalanced, ema_losses, device)
 
-    compare_fid_scores(test_loader, generator_balanced, generator_imbalanced, imbalance_ratios)
+    compare_fid_and_is_scores(test_loader, generator_balanced, generator_imbalanced, imbalance_ratios)

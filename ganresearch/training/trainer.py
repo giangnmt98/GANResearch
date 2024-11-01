@@ -1,10 +1,8 @@
-import datetime
-import os
-
 import matplotlib.pyplot as plt
 import torch
-from tqdm import tqdm
+import torchvision.utils as vutils
 from torch import nn
+from tqdm import tqdm
 
 from ganresearch.training.optimizer import Optimizer
 from ganresearch.utils.utils import create_logger
@@ -14,7 +12,7 @@ logger = create_logger()
 
 
 class Trainer:
-    def __init__(self, model, config, train_loader, val_loader=None):
+    def __init__(self, model, config, train_loader, val_loader, save_path):
         """
         Khởi tạo Trainer với mô hình, cấu hình và DataLoader.
 
@@ -29,8 +27,11 @@ class Trainer:
         self.device = config["training"]["device"]
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.loss_function = self.model.losses.calculate_loss
+        self.ema_losses = self.model.losses.ema
         self.gen_loss_history = []
         self.disc_loss_history = []
+        self.save_path = save_path
 
     def weights_init(self, m):
         if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -39,12 +40,99 @@ class Trainer:
             nn.init.normal_(m.weight, 1.0, 0.02)
             nn.init.zeros_(m.bias)
 
-    from tqdm import tqdm  # Import tqdm for progress bar
+    def _train_one_epoch(
+        self,
+        epoch,
+        dataloader,
+        discriminator,
+        generator,
+        optimizer_d,
+        optimizer_g,
+        loss_function,
+        ema_losses,
+        device,
+        g_loss_total,
+    ):
+        """
+        Train one epoch of the GAN model.
+        """
+        # Thêm tqdm vào dataloader để hiển thị tiến độ trong từng epoch
+        for i, data in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}", unit="batch")):
+            ############################
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+            ###########################
+            discriminator.zero_grad()
+            real_in_cpu = data[0].to(device)
+            batch_size = real_in_cpu.size(0)
 
-    def train(self, early_stop=False, patience=5, save_loss=True):
+            # Train with real
+            real_output = discriminator(real_in_cpu)
+            d_x = real_output.mean().item()
+
+            # Generate fake images
+            noise = torch.randn(
+                batch_size,
+                self.config["training"]["noise_dimension"],
+                1,
+                1,
+                device=device,
+            )
+            fake = generator(noise)
+            fake_output = discriminator(fake.detach())
+
+            # Calculate discriminator loss
+            d_loss = loss_function(
+                real_output, fake_output, is_discriminator=True, epoch=i
+            )
+            d_loss.backward()
+            optimizer_d.step()
+            d_g_z1 = fake_output.mean().item()
+
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            generator.zero_grad()
+            fake_output = discriminator(fake)
+
+            # Calculate generator loss
+            g_loss = loss_function(None, fake_output, is_discriminator=False)
+            g_loss.backward()
+            optimizer_g.step()
+
+            # Accumulate generator loss
+            if ema_losses is not None:
+                ema_losses.update(g_loss_total, "G_loss", i)
+                g_loss_total += g_loss.item()
+
+            d_g_z2 = fake_output.mean().item()
+
+            # Optional logging
+            if i % int(self.config["training"]["log_interval"]) == 0:
+                logger.info(
+                    "[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f"
+                    % (
+                        epoch,
+                        self.config["training"]["num_epochs"],
+                        i,
+                        len(dataloader),
+                        d_loss.item(),
+                        g_loss.item(),
+                        d_x,
+                        d_g_z1,
+                        d_g_z2,
+                    )
+                )
+
+        return (
+            d_loss.item(),
+            g_loss.item(),
+        )
+
+    def train(self, early_stop=False, patience=5, save_loss=True, gen_images=False):
         """
         Thực hiện huấn luyện mô hình trong số epoch đã chỉ định.
         """
+
         num_epochs = self.config["training"]["num_epochs"]
         best_loss = float("inf")
         no_improvement_count = 0
@@ -58,9 +146,22 @@ class Trainer:
         self.model.gen_optimizer = optim.create(self.model.generator.parameters())
         self.model.disc_optimizer = optim.create(self.model.discriminator.parameters())
 
+        g_loss_total = 0
+
         # Tiến trình huấn luyện với thanh progress bar
         for epoch in tqdm(range(1, num_epochs + 1), desc="Training", unit="epoch"):
-            gen_loss, disc_loss = self._train_one_epoch()
+            gen_loss, disc_loss = self._train_one_epoch(
+                epoch,
+                self.train_loader,
+                self.model.discriminator,
+                self.model.generator,
+                self.model.disc_optimizer,
+                self.model.gen_optimizer,
+                self.loss_function,
+                self.ema_losses,
+                self.device,
+                g_loss_total,
+            )
 
             # Log thông tin về epoch hiện tại
             logger.info(
@@ -71,13 +172,6 @@ class Trainer:
             # Lưu lịch sử loss để vẽ biểu đồ
             self.gen_loss_history.append(gen_loss)
             self.disc_loss_history.append(disc_loss)
-
-            # Hiển thị loss mỗi vài epoch (tùy theo config)
-            if epoch % self.config["training"].get("display_interval", 10) == 0:
-                print(
-                    f"Epoch [{epoch}/{num_epochs}] | Gen Loss: {gen_loss:.4f} | "
-                    f"Disc Loss: {disc_loss:.4f}"
-                )
 
             # Early Stopping Logic
             if early_stop:
@@ -94,71 +188,26 @@ class Trainer:
 
             # Lưu model mỗi save_interval epoch
             if epoch % self.config["training"].get("save_interval", 100) == 0:
-                self.save_models()
-
-        # Vẽ và lưu biểu đồ loss nếu được yêu cầu
+                self.save_models(self.save_path, model_name=f"epoch_{epoch}")
+                fake = self.model.generator(
+                    torch.randn(
+                        self.config["training"]["batch_size"],
+                        self.config["training"]["noise_dimension"],
+                        1,
+                        1,
+                        device=self.device,
+                    )
+                )
+                vutils.save_image(
+                    fake.detach(),
+                    "%s/fake_samples_epoch_%03d.png" % (self.save_path, epoch),
+                    normalize=True,
+                )
+        self.save_models(self.save_path, model_name="final")
         if save_loss:
-            self._save_loss_figure()
+            self._save_loss_figure(self.save_path)
 
-    def _train_one_epoch(self):
-        """
-        Huấn luyện một epoch với logic từ DCGAN.
-
-        Args:
-            epoch: Số thứ tự của epoch hiện tại.
-
-        Returns:
-            avg_gen_loss (float): Giá trị loss trung bình của generator.
-            avg_disc_loss (float): Giá trị loss trung bình của discriminator.
-        """
-        self.model.generator.train()
-        self.model.discriminator.train()
-
-        gen_loss_sum = 0.0
-        disc_loss_sum = 0.0
-
-        for real_images, _ in self.train_loader:
-            real_images = real_images.to(self.device)
-            batch_size = real_images.size(0)
-
-            # Sinh noise ngẫu nhiên cho generator
-            noise = torch.randn(
-                batch_size,
-                self.config["training"]["noise_dimension"],
-                1,
-                1,
-                device=self.device,
-            )
-
-            # Huấn luyện discriminator
-            self.model.discriminator.zero_grad()
-            real_output = self.model.discriminator(real_images)
-            fake_images = self.model.generator(noise).detach()
-            fake_output = self.model.discriminator(fake_images)
-
-            disc_loss = self.model.loss(real_output, fake_output)
-            disc_loss.backward()
-            self.model.disc_optimizer.step()
-
-            # Huấn luyện generator
-            self.model.generator.zero_grad()
-            fake_images = self.model.generator(noise)
-            fake_output = self.model.discriminator(fake_images)
-
-            gen_loss = self.model.criterion(fake_output, torch.ones_like(fake_output))
-            gen_loss.backward()
-            self.model.gen_optimizer.step()
-
-            # Cộng dồn loss
-            gen_loss_sum += gen_loss.item()
-            disc_loss_sum += disc_loss.item()
-
-        # Tính loss trung bình cho epoch
-        avg_gen_loss = gen_loss_sum / len(self.train_loader)
-        avg_disc_loss = disc_loss_sum / len(self.train_loader)
-        return avg_gen_loss, avg_disc_loss
-
-    def _save_loss_figure(self):
+    def _save_loss_figure(self, save_path):
         """
         Vẽ và lưu biểu đồ loss của generator và discriminator.
         """
@@ -169,30 +218,19 @@ class Trainer:
         plt.ylabel("Loss")
         plt.legend()
         plt.title("Training Loss over Epochs")
-
-        save_path = self.config["model"]["save_path"]
-        os.makedirs(save_path, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        plt.savefig(f"{save_path}/{timestamp}_loss.png")
+        plt.savefig(f"{save_path}/loss.png")
         plt.close()
-        logger.info(f"Loss figure saved at {save_path}/{timestamp}_loss.png")
+        logger.info(f"Loss figure saved at {save_path}/loss.png")
 
-    def save_models(self):
+    def save_models(self, save_path, model_name):
         """
         Lưu các mô hình generator và discriminator vào đĩa.
         """
-        save_path = self.config["model"]["save_path"]
-        os.makedirs(save_path, exist_ok=True)
-
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        torch.save(self.model.generator, f"{save_path}/generator_{model_name}.pth")
         torch.save(
-            self.model.generator.state_dict(), f"{save_path}/{timestamp}_generator.pth"
+            self.model.discriminator, f"{save_path}/discriminator_{model_name}.pth"
         )
-        torch.save(
-            self.model.discriminator.state_dict(),
-            f"{save_path}/{timestamp}_discriminator.pth",
-        )
-        logger.info(f"Models saved at {save_path}/{timestamp}_generator.pth")
+        logger.info(f"Models saved at {save_path}")
 
     def load_models(self, generator_path=None, discriminator_path=None):
         """

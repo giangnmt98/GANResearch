@@ -5,7 +5,6 @@ A module for managing datasets and DataLoaders for GAN research using PyTorch.
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
-
 from ganresearch.datasets import datasets
 from ganresearch.utils.utils import create_logger
 
@@ -19,7 +18,8 @@ class DataLoaderManager:
         Initialize DataLoaderManager to manage datasets based on the given config.
 
         Args:
-            config (dict): Configuration dictionary containing dataset and training settings.
+            config (dict): Configuration dictionary containing dataset and
+                           training settings.
         """
         self.config = config
         self.dataset = None
@@ -54,6 +54,7 @@ class DataLoaderManager:
         # Select and initialize the appropriate dataset class
         if dataset_type in dataset_classes:
             self.dataset = dataset_classes[dataset_type](
+                config=self.config,
                 root=data_path,
                 transform=self.get_transform(),
                 batch_size=batch_size,
@@ -94,11 +95,6 @@ class DataLoaderManager:
             val_loader (torch.utils.data.DataLoader): DataLoader for validation data.
             test_loader (torch.utils.data.DataLoader): DataLoader for testing data.
         """
-        if not self.config["dataset"]["split_dataset"]:
-            # If dataset splitting is not required, use the whole dataset as training dataset
-            self.train_loader = self.dataset.get_dataloader()
-            return
-
         # Calculate sizes for train, validation, and test datasets
         dataset_size = len(self.dataset.dataset)
         train_size = int(self.config["dataset"]["split_ratio"]["train"] * dataset_size)
@@ -112,19 +108,47 @@ class DataLoaderManager:
             self.dataset.dataset, [train_size, val_size, test_size]
         )
 
-        # Create DataLoaders for each split dataset
+        def custom_collate_fn(batch):
+            """
+            Custom collate function to handle batch data.
+
+            Args:
+                batch (list): Batch data.
+
+            Returns:
+                tuple: Processed images and labels.
+            """
+            transform = transforms.Resize((self.config["dataset"]["image_size"], self.config["dataset"]["image_size"]))
+            images, labels = zip(*batch)
+            images = [transform(image) for image in images]
+            images = torch.stack(images, 0)
+            labels = torch.tensor(labels)
+            return images, labels
+
+        batch_size = self.config["training"]["batch_size"]  # Batch size
+
+        # Initialize DataLoader for training data
         self.train_loader = DataLoader(
             train_dataset,
-            batch_size=self.config["training"]["batch_size"],
-            shuffle=True,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=custom_collate_fn,
         )
+
+        # Initialize DataLoader for validation data
         self.val_loader = DataLoader(
-            val_dataset, batch_size=self.config["training"]["batch_size"], shuffle=False
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=custom_collate_fn,
         )
+
+        # Initialize DataLoader for testing data
         self.test_loader = DataLoader(
             test_dataset,
-            batch_size=self.config["training"]["batch_size"],
+            batch_size=batch_size,
             shuffle=False,
+            collate_fn=custom_collate_fn,
         )
 
     def get_dataloaders(self):
@@ -132,7 +156,7 @@ class DataLoaderManager:
         Get DataLoaders for training, validation, and testing.
 
         Returns:
-            tuple: DataLoaders for training, validation,
-             and testing as (train_loader, val_loader, test_loader).
+            tuple: DataLoaders for training, validation, and testing as
+                   (train_loader, val_loader, test_loader).
         """
         return self.train_loader, self.val_loader, self.test_loader

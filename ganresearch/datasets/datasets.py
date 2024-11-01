@@ -7,7 +7,7 @@ import os
 
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets
 from tqdm import tqdm
 
@@ -18,7 +18,7 @@ logger = create_logger()
 
 
 class BaseDataLoaderConfig:
-    def __init__(self, batch_size=32, shuffle=True, transform=None):
+    def __init__(self, config, batch_size=32, shuffle=True, transform=None):
         """
         Basic class containing common attributes and methods.
         Args:
@@ -29,6 +29,7 @@ class BaseDataLoaderConfig:
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.transform = transform
+        self.config=config
 
     def get_dataloader(self, dataset):
         """
@@ -39,6 +40,25 @@ class BaseDataLoaderConfig:
             torch.utils.data.DataLoader: DataLoader instance for the dataset.
         """
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
+
+    def select_class_id(self, dataset):
+        select_class_id = self.config["dataset"]["select_class_id"]
+        if len(select_class_id) > 0:
+            logger.info(f"Class list extracted from DataLoader: {select_class_id}")
+            # Chọn chỉ số của các mẫu thuộc lớp mong muốn
+            indices = [i for i, (_, label) in enumerate(dataset) if label in select_class_id]
+
+            # Tạo một `Subset` dataset chỉ với các mẫu thuộc lớp mong muốn
+            filtered_dataset = Subset(dataset, indices)
+            return filtered_dataset
+        else:
+            return dataset
+
+    def __getitem__(self, index):
+        image, label = self.data[index]
+        if self.transform:
+            image = self.transform(image)
+        return image, label
 
 
 class MNISTDataset(BaseDataLoaderConfig):
@@ -61,9 +81,11 @@ class MNISTDataset(BaseDataLoaderConfig):
         Returns:
             datasets.MNIST: The initialized MNIST dataset.
         """
-        return datasets.MNIST(
+
+        dataset = datasets.MNIST(
             root=root, train=train, download=True, transform=self.transform
         )
+        return self.select_class_id(dataset)
 
 
 class CIFAR10Dataset(BaseDataLoaderConfig):
@@ -86,9 +108,10 @@ class CIFAR10Dataset(BaseDataLoaderConfig):
         Returns:
             datasets.CIFAR10: The initialized CIFAR-10 dataset.
         """
-        return datasets.CIFAR10(
+        dataset = datasets.CIFAR10(
             root=root, train=train, download=True, transform=self.transform
         )
+        return self.select_class_id(dataset)
 
 
 class CIFAR100Dataset(BaseDataLoaderConfig):
@@ -111,9 +134,10 @@ class CIFAR100Dataset(BaseDataLoaderConfig):
         Returns:
             datasets.CIFAR100: The initialized CIFAR-100 dataset.
         """
-        return datasets.CIFAR100(
+        dataset = datasets.CIFAR100(
             root=root, train=train, download=True, transform=self.transform
         )
+        return self.select_class_id(dataset)
 
 
 class GTSRBDataset(BaseDataLoaderConfig):
@@ -136,8 +160,10 @@ class GTSRBDataset(BaseDataLoaderConfig):
         Returns:
             datasets.GTSRB: The initialized GTSRB dataset.
         """
-        return datasets.GTSRB(root=root, train=train, transform=self.transform)
-
+        dataset = datasets.GTSRB(
+            root=root, download=True, transform=self.transform
+        )
+        return self.select_class_id(dataset)
 
 class Flowers102Dataset(BaseDataLoaderConfig):
     def __init__(self, root="./data", train=True, **kwargs):
@@ -159,8 +185,10 @@ class Flowers102Dataset(BaseDataLoaderConfig):
         Returns:
             datasets.Flowers102: The initialized Flowers102 dataset.
         """
-        return datasets.Flowers102(root=root, train=train, transform=self.transform)
-
+        dataset = datasets.Flowers102(
+            root=root, download=True, transform=self.transform
+        )
+        return self.select_class_id(dataset)
 
 class ImageNetDataset(BaseDataLoaderConfig):
     def __init__(self, root="./data", split="train", **kwargs):
@@ -182,7 +210,10 @@ class ImageNetDataset(BaseDataLoaderConfig):
         Returns:
             datasets.ImageNet: The initialized ImageNet dataset.
         """
-        return datasets.ImageNet(root=root, split=split, transform=self.transform)
+        dataset = datasets.ImageNet(
+            root=root, split=split, download=True, transform=self.transform
+        )
+        return self.select_class_id(dataset)
 
 
 class CustomDataset(BaseDataLoaderConfig):
@@ -335,14 +366,14 @@ class CustomDataset(BaseDataLoaderConfig):
 # Sử dụng CustomDataset
 # -------------------------
 
-# # Khởi tạo CustomDataset và tạo DataLoader
+# Khởi tạo CustomDataset và tạo DataLoader
 # custom_dataset = CustomDataset(root_dir='./data/Stanford Dogs Dataset',
 # output_file='./data/StanfordDogsDataset.pt')
 #
 # # Tạo và lưu dataset
 # custom_dataset.create_and_save_dataset()
-#
-# # Load dataset và duyệt qua DataLoader
+
+# Load dataset và duyệt qua DataLoader
 # dataloader = custom_dataset.get_dataloader(batch_size=32)
 #
 # for images, labels in dataloader:

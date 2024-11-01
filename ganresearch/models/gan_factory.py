@@ -2,6 +2,7 @@
 Module for creating various types of GAN models based on configuration settings.
 """
 
+from ganresearch.losses.dcgan_loss import DCGANLoss
 from ganresearch.models.cgan import CGAN
 from ganresearch.models.dcgan import DCGAN
 from ganresearch.models.wgan_gp import WGANGP
@@ -38,7 +39,10 @@ class GANFactory:
 
         # Check the model name and create the corresponding model instance
         if model_name == "dcgan":
-            return DCGAN(self.config)  # Create and return a DCGAN model
+            losses = DCGANLoss(self.config)
+            return DCGAN(
+                config=self.config, losses=losses
+            )  # Create and return a DCGAN model
         elif model_name == "wgan_gp":
             return WGANGP(self.config)  # Create and return a WGAN-GP model
         elif model_name == "cgan":
