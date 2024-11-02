@@ -144,7 +144,7 @@ class BaseTrainer:
             fid_score = run_eval_on_train(
                 config=self.config,
                 generator=self.model.generator,
-                dataloader=self.train_loader,
+                dataloader=self.val_loader,
             )
             logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
 
