@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 import torchvision.utils as vutils
 from torch import nn
+
 from ganresearch.training.optimizer import Optimizer
 from ganresearch.utils.utils import create_logger
 
@@ -53,17 +54,17 @@ class BaseTrainer:
             nn.init.zeros_(m.bias)
 
     def _train_one_epoch(
-            self,
-            epoch,
-            dataloader,
-            discriminator,
-            generator,
-            optimizer_d,
-            optimizer_g,
-            loss_function,
-            ema_losses,
-            device,
-            g_loss_total,
+        self,
+        epoch,
+        dataloader,
+        discriminator,
+        generator,
+        optimizer_d,
+        optimizer_g,
+        loss_function,
+        ema_losses,
+        device,
+        g_loss_total,
     ):
         """
         Train one epoch of the GAN model.

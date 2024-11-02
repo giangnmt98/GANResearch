@@ -4,6 +4,8 @@ GTSRB, Flowers102, and ImageNet, alongside a custom dataset class.
 """
 
 import os
+import random
+from collections import defaultdict
 
 import torch
 from PIL import Image
@@ -42,15 +44,58 @@ class BaseDataLoaderConfig:
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
     def select_class_id(self, dataset):
-        select_class_id = self.config["dataset"]["select_class_id"]
-        if len(select_class_id) > 0:
-            logger.info(f"Class list extracted from DataLoader: {select_class_id}")
-            # Chọn chỉ số của các mẫu thuộc lớp mong muốn
-            indices = [
-                i for i, (_, label) in enumerate(dataset) if label in select_class_id
-            ]
+        select_class_id = set(
+            self.config["dataset"]["select_class_id"]
+        )  # Convert to set for faster lookups
+        class_imbalance_ratio = self.config["dataset"].get("class_imbalance_ratio", {})
 
-            # Tạo một `Subset` dataset chỉ với các mẫu thuộc lớp mong muốn
+        if select_class_id:
+            # Dictionary to hold indices grouped by class
+            class_indices = defaultdict(list)
+
+            # Group all indices by their class labels in one loop
+            for i, (_, label) in enumerate(dataset):
+                if label in select_class_id:
+                    class_indices[label].append(i)
+
+            # Create a list to store the final sampled indices
+            indices = []
+
+            # Process each class according to its imbalance ratio
+            # Dictionary to store the original and new sample counts for each class
+            sample_counts = {}
+
+            for class_id, idx_list in class_indices.items():
+                original_count = len(
+                    idx_list
+                )  # Original number of samples for this class
+                ratio = class_imbalance_ratio.get(
+                    class_id, 1.0
+                )  # Default to 1.0 if not specified
+                num_samples = int(original_count * ratio)
+                sampled_indices = (
+                    random.sample(idx_list, num_samples) if ratio < 1.0 else idx_list
+                )
+                indices.extend(sampled_indices)
+
+                # Store the counts for later display
+                sample_counts[class_id] = {
+                    "original": original_count,
+                    "selected": len(sampled_indices),
+                    "ratio": ratio,
+                }
+
+            # logger.info the results outside the loop
+            logger.info("\nSample Counts by Class:")
+            logger.info("Class | Original Samples | Selected Samples | Ratio")
+            logger.info("-----------------------------------------------------")
+            for class_id, counts in sample_counts.items():
+                logger.info(
+                    f"{class_id:>5} | {counts['original']:>15} | {counts['selected']:>15} | "
+                    f"{counts['ratio']:>5.2f}"
+                )
+
+            # Create a subset dataset with the sampled indices
             filtered_dataset = Subset(dataset, indices)
             return filtered_dataset
         else:

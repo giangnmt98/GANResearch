@@ -270,8 +270,19 @@ def run_eval(
     df.to_csv(os.path.join(save_path, "scores.csv"), index=False)
 
     if gen_image:
-        noise = torch.randn(100, noise_dimension, 1, 1, device=device)
-        generated_images = generator(noise)
+        # Generate noise and labels
+        noise = torch.randn(
+            config["training"]["batch_size"], noise_dimension, 1, 1, device=device
+        )
+        if has_labels:
+            labels = torch.randint(
+                0, len(list_class), (config["training"]["batch_size"],), device=device
+            )
+
+            # Generate fake images using the generator
+            generated_images = generator(noise, labels)
+        else:
+            generated_images = generator(noise)
         vutils.save_image(
             generated_images, os.path.join(save_path, "generated_images.png"), nrow=10
         )

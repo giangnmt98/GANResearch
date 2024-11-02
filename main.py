@@ -43,7 +43,7 @@ def main(config):
     logger.info("=" * 50)
 
     # DataLoader Preparation
-    logger.info(f"Preparing DataLoader for {config['dataset']['type']} dataset")
+    logger.info(f"Preparing DataLoader for {(config['dataset']['type']).upper()} dataset")
     dataloader_manager = DataLoaderManager(config)
     train_loader, val_loader, test_loader = dataloader_manager.get_dataloaders()
     logger.info("=" * 50)

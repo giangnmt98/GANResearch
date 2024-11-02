@@ -45,9 +45,7 @@ class Optimizer:
         # Creating SGD optimizer if specified in config
         elif optimizer_type == "sgd":
             return optim.SGD(
-                model_params,
-                lr=self.config["training"]["learning_rate"],
-                momentum=0.9
+                model_params, lr=self.config["training"]["learning_rate"], momentum=0.9
             )
         # Creating AdamW optimizer if specified in config
         elif optimizer_type == "adamw":
