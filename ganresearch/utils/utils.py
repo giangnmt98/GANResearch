@@ -234,3 +234,51 @@ def generate_and_display_images(
     # Save the displayed images
     plt.savefig(save_path)
     plt.show()
+
+
+def create_and_save_dataset(root_dir, output_file, transform):
+    """
+    Create the dataset from a directory and save it to a .pt file.
+    """
+    from tqdm import tqdm
+
+    data = []  # List to store (image, label) tuples
+    classes = sorted(os.listdir(root_dir))
+    class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
+    total_files = sum(len(files) for _, _, files in os.walk(root_dir))
+
+    # Initialize progress bar
+    progress_bar = tqdm(total=total_files, desc="Processing images", unit="file")
+
+    # Loop through subdirectories to gather data
+    for class_name in classes:
+        class_path = os.path.join(root_dir, class_name)
+        if not os.path.isdir(class_path):
+            continue
+        for img_name in os.listdir(class_path):
+            if is_image_file(img_name):
+                img_path = os.path.join(class_path, img_name)
+                image = Image.open(img_path).convert("RGB")
+                image = transform(image)
+                label = class_to_idx[class_name]
+                data.append((image, label))
+                progress_bar.update(1)  # Update progress bar
+
+    progress_bar.close()  # Close progress bar
+
+    # Convert image list and labels into Tensor
+    images, labels = zip(*data)
+    dataset = {
+        "images": torch.stack(images),
+        "labels": torch.tensor(labels),
+        "class_to_idx": class_to_idx,  # Include class-to-idx mapping
+    }
+    # Check if the file already exists before saving
+    if os.path.exists(output_file):
+        logger.info(f"File {output_file} already exists. Overwriting the file.")
+    else:
+        logger.info(f"File {output_file} does not exist. Creating a new file.")
+
+    # Save the dataset to a .pt file
+    torch.save(dataset, output_file)
+    logger.info(f"Dataset saved to {output_file}")

@@ -43,7 +43,7 @@ class DCGANLoss(Losses):
         """
 
         # Binary Cross Entropy loss function
-        loss_fn = nn.BCELoss()
+        criterion = nn.BCELoss()
 
         if is_discriminator:
             if self.ema is not None:
@@ -54,8 +54,8 @@ class DCGANLoss(Losses):
             # For discriminator: maximize log(D(x)) + log(1 - D(G(z)))
             real_labels = torch.ones_like(real_output)  # Labels for real images
             fake_labels = torch.zeros_like(fake_output)  # Labels for fake images
-            real_loss = loss_fn(real_output, real_labels)
-            fake_loss = loss_fn(fake_output, fake_labels)
+            real_loss = criterion(real_output, real_labels)
+            fake_loss = criterion(fake_output, fake_labels)
 
             if self.use_lecam and self.lecam_ratio > 0 and epoch > self.ema.start_epoch:
                 # Apply LeCam regularization if conditions are met
@@ -69,4 +69,4 @@ class DCGANLoss(Losses):
         else:
             # For generator: minimize log(1 - D(G(z))) / equivalently maximize log(D(G(z)))
             real_labels = torch.ones_like(fake_output)  # Labels should be real
-            return loss_fn(fake_output, real_labels)
+            return criterion(fake_output, real_labels)

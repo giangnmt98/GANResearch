@@ -137,7 +137,7 @@ class CGANTrainer(BaseTrainer):
                     self.config["training"]["num_epochs"],
                     i,
                     len(dataloader),
-                    d_loss.item() ,
+                    d_loss.item(),
                     g_loss.item(),
                 )
         return d_loss.item(), g_loss.item()

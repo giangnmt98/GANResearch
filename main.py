@@ -29,12 +29,17 @@ def create_trainer(config, model, train_loader, val_loader, save_path):
 def prepare_save_path(config):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     use_lc = "non_lc"
+    balance = "balance"
     if config["training"]["use_lecam"]:
         use_lc = "lc_" + str(config["training"]["lecam_ratio"])
+    if len(config["dataset"]["class_imbalance_ratio"]) >0:
+        balance = "imbalance"
+
     save_path = os.path.join(
         config["model"]["save_path"],
         config["model"]["name"],
         config["dataset"]["type"],
+        balance,
         use_lc,
         timestamp,
     )

@@ -49,17 +49,26 @@ class DataLoaderManager:
             "gtrsb": datasets.GTSRBDataset,
             "flowers102": datasets.Flowers102Dataset,
             "imagenet": datasets.ImageNetDataset,
-            "custom": datasets.CustomDataset,
+            "standford_dogs": datasets.StandfordDogsDataset,
         }
 
         # Select and initialize the appropriate dataset class
         if dataset_type in dataset_classes:
-            self.dataset = dataset_classes[dataset_type](
-                config=self.config,
-                root=data_path,
-                transform=self.get_transform(),
-                batch_size=batch_size,
-            )
+            if dataset_type == "standford_dogs":
+                self.dataset = dataset_classes[dataset_type](
+                    config=self.config,
+                    data_path=self.config["dataset"]["data_path"],
+                    transform=self.get_transform(),
+                    batch_size=batch_size,
+                    shuffle=False,
+                )
+            else:
+                self.dataset = dataset_classes[dataset_type](
+                    config=self.config,
+                    root=data_path,
+                    transform=self.get_transform(),
+                    batch_size=batch_size,
+                )
         else:
             raise ValueError(f"Dataset `{dataset_type}` is not supported.")
 

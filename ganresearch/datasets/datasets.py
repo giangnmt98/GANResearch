@@ -8,10 +8,8 @@ import random
 from collections import defaultdict
 
 import torch
-from PIL import Image
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets
-from tqdm import tqdm
 
 from ganresearch.utils.utils import create_logger
 
@@ -42,7 +40,6 @@ class BaseDataLoaderConfig:
             torch.utils.data.DataLoader: DataLoader instance for the dataset.
         """
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
-
 
     def select_class_id(self, dataset):
         select_class_id = set(self.config["dataset"]["select_class_id"])
@@ -267,79 +264,21 @@ class ImageNetDataset(BaseDataLoaderConfig):
         return self.select_class_id(dataset)
 
 
-class CustomDataset(BaseDataLoaderConfig):
-    def __init__(self, root_dir, output_file="dataset.pt", **kwargs):
+class StandfordDogsDataset(BaseDataLoaderConfig):
+    def __init__(self, config, batch_size, shuffle, transform, data_path):
+        super().__init__(config, batch_size, shuffle, transform)
         """
-        Initialize CustomDataset with the given attributes.
+        Initializes the dataset with file path, batch size, and shuffle option.
 
         Args:
-            root_dir (str): Path to the directory containing images and classes.
-            output_file (str): Name of the .pt file to save the dataset.
+            output_file (str): Path to the .pt file containing the dataset.
+            batch_size (int): Batch size for the DataLoader.
+            shuffle (bool): Whether to shuffle the data.
         """
-        super().__init__(**kwargs)
-        self.root_dir = root_dir
-        self.output_file = output_file
-        self.data = None
-
-    def is_image_file(self, filename):
-        """
-        Check if a file is an image.
-
-        Args:
-            filename (str): The filename to check.
-
-        Returns:
-            bool: True if the file is an image, False otherwise.
-        """
-        IMG_EXTENSIONS = [".jpg", ".jpeg", ".png", ".bmp"]
-        return any(filename.lower().endswith(ext) for ext in IMG_EXTENSIONS)
-
-    def create_and_save_dataset(self):
-        """
-        Create the dataset from a directory and save it to a .pt file.
-        """
-        data = []  # List to store (image, label) tuples
-        classes = sorted(os.listdir(self.root_dir))
-        class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
-        total_files = sum(len(files) for _, _, files in os.walk(self.root_dir))
-
-        # Initialize progress bar
-        progress_bar = tqdm(total=total_files, desc="Processing images", unit="file")
-
-        # Loop through subdirectories to gather data
-        for class_name in classes:
-            class_path = os.path.join(self.root_dir, class_name)
-            if not os.path.isdir(class_path):
-                continue
-            for img_name in os.listdir(class_path):
-                if self.is_image_file(img_name):
-                    img_path = os.path.join(class_path, img_name)
-                    image = Image.open(img_path).convert("RGB")
-                    image = self.transform(image)
-                    label = class_to_idx[class_name]
-                    data.append((image, label))
-                    progress_bar.update(1)  # Update progress bar
-
-        progress_bar.close()  # Close progress bar
-
-        # Convert image list and labels into Tensor
-        images, labels = zip(*data)
-        dataset = {
-            "images": torch.stack(images),
-            "labels": torch.tensor(labels),
-            "class_to_idx": class_to_idx,  # Include class-to-idx mapping
-        }
-        # Check if the file already exists before saving
-        if os.path.exists(self.output_file):
-            logger.info(
-                f"File {self.output_file} already exists. Overwriting the file."
-            )
-        else:
-            logger.info(f"File {self.output_file} does not exist. Creating a new file.")
-
-        # Save the dataset to a .pt file
-        torch.save(dataset, self.output_file)
-        logger.info(f"Dataset saved to {self.output_file}")
+        self.data_path = data_path
+        self.dataset = None  # Placeholder for loaded dataset
+        self.data = None  # Placeholder for loaded data
+        self.load_dataset()
 
     def load_dataset(self):
         """
@@ -347,26 +286,16 @@ class CustomDataset(BaseDataLoaderConfig):
 
         Raises:
             FileNotFoundError: If the specified .pt file does not exist.
+            ValueError: If the data format is not compatible.
         """
-        if not os.path.exists(self.output_file):
-            raise FileNotFoundError(f"{self.output_file} does not exist.")
-        self.data = torch.load(self.output_file)
-        logger.info(f"Dataset loaded from {self.output_file}")
+        if not os.path.exists(self.data_path):
+            raise FileNotFoundError(f"{self.data_path} does not exist.")
 
-    def get_dataloader(self, batch_size=32, shuffle=True):
-        """
-        Override to return a DataLoader from the loaded data.
+        # Load data from the .pt file
+        self.data = torch.load(self.data_path)
+        logger.info(f"Dataset loaded from {self.data_path}")
 
-        Args:
-            batch_size (int): Size of each batch.
-            shuffle (bool): Whether to shuffle the data.
-
-        Returns:
-            torch.utils.data.DataLoader: DataLoader for the loaded dataset.
-        """
-        if self.data is None:
-            self.load_dataset()
-
+        # Define TensorDataset inline to wrap the loaded data
         class TensorDataset(Dataset):
             def __init__(self, data):
                 self.images = data["images"]
@@ -378,55 +307,45 @@ class CustomDataset(BaseDataLoaderConfig):
             def __getitem__(self, idx):
                 return self.images[idx], self.labels[idx]
 
+        # Create and return a DataLoader
         tensor_dataset = TensorDataset(self.data)
-        return DataLoader(tensor_dataset, batch_size=batch_size, shuffle=shuffle)
+        self.dataset = tensor_dataset
 
+        # Verify the structure of the data
+        if (
+            isinstance(self.data, dict)
+            and "images" in self.data
+            and "labels" in self.data
+        ):
+            if not isinstance(self.data["images"], torch.Tensor) or not isinstance(
+                self.data["labels"], torch.Tensor
+            ):
+                raise ValueError(
+                    "Data should contain 'images' and 'labels' as torch tensors."
+                )
+        else:
+            raise ValueError(
+                "Unsupported data format. Expected a dictionary with 'images' and 'labels' keys."
+            )
 
-# -------------------------
-# Sử dụng các class dataset
-# -------------------------
+    def get_dataloader(self):
+        """
+        Return a DataLoader from the loaded data.
 
-# # Define the transformation with single-channel image normalization
-# transform = transforms.Compose([
-#     transforms.Resize((128, 128)),
-#     transforms.ToTensor(),
-#     # Normalize the single channel image
-#     transforms.Normalize(mean=[0.5], std=[0.5])
-# ])
-#
-# # Load the MNIST dataset with the transformation
-# mnist_dataset = datasets.MNIST(root='./data', train=True,
-# transform=transform, download=True)
-# mnist_loader = torch.utils.data.DataLoader(mnist_dataset,
-# batch_size=64, shuffle=True)
-#
-# # Duyệt qua 1 batch dữ liệu MNIST
-# for images, labels in mnist_loader:
-#     logger.info(f"Batch size: {images.size()}, Labels: {labels}")
-#     break
+        Returns:
+            torch.utils.data.DataLoader: DataLoader for the loaded dataset.
+        """
+        return DataLoader(
+            self.dataset, batch_size=self.batch_size, shuffle=self.shuffle
+        )
 
-# cifar10_dataset = CIFAR10Dataset()
-# cifar10_loader = cifar10_dataset.get_dataloader()
-#
-# # Duyệt qua 1 batch dữ liệu MNIST
-# for images, labels in cifar10_loader:
-#     logger.info(f"Batch size: {images.size()}, Labels: {labels}")
-#     break
+    def __len__(self):
+        """
+        Returns the total number of samples in the dataset.
 
-# -------------------------
-# Sử dụng CustomDataset
-# -------------------------
-
-# Khởi tạo CustomDataset và tạo DataLoader
-# custom_dataset = CustomDataset(root_dir='./data/Stanford Dogs Dataset',
-# output_file='./data/StanfordDogsDataset.pt')
-#
-# # Tạo và lưu dataset
-# custom_dataset.create_and_save_dataset()
-
-# Load dataset và duyệt qua DataLoader
-# dataloader = custom_dataset.get_dataloader(batch_size=32)
-#
-# for images, labels in dataloader:
-#     logger.info(f'Batch size: {images.size()}, Labels: {labels}')
-#     break
+        Returns:
+            int: Number of samples in the dataset.
+        """
+        if self.dataset is None:
+            self.load_dataset()
+        return len(self.dataset)

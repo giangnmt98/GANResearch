@@ -91,7 +91,7 @@ class Generator(nn.Module):
             nn.ConvTranspose2d(opt.ngf * 2, opt.ngf, 4, 2, 1, bias=False),
             nn.BatchNorm2d(opt.ngf),
             nn.ReLU(True),
-            nn.ConvTranspose2d(opt.ngf, 3, 4, 2, 1, bias=False),
+            nn.ConvTranspose2d(opt.ngf, 1, 4, 2, 1, bias=False),
             nn.Tanh()
         )
 
@@ -107,7 +107,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.ngpu = ngpu
         self.main = nn.Sequential(
-            nn.Conv2d(3, opt.ndf, 4, 2, 1, bias=False),
+            nn.Conv2d(1, opt.ndf, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(opt.ndf, opt.ndf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(opt.ndf * 2),
@@ -303,8 +303,8 @@ def create_datasets(imbalance_ratios, batch_size=64):
       transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
   ])
 
-  cifar10_train = dset.CIFAR10(root="./data", train=True, download=True, transform=train_transform)
-  cifar10_test = dset.CIFAR10(root="./data", train=False, download=True, transform=fid_transform)
+  cifar10_train = dset.MNIST(root="./data", train=True, download=True, transform=train_transform)
+  cifar10_test = dset.MNIST(root="./data", train=False, download=True, transform=fid_transform)
 
   train_size = int(0.8 * len(cifar10_train))
   val_size = len(cifar10_train) - train_size
