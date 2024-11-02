@@ -96,7 +96,7 @@ class CGANTrainer(BaseTrainer):
             # Discriminator output on fake images
             fake_output = discriminator(fake_images.detach(), labels).view(-1)
 
-            g_loss_fake, d_loss_real = loss_function(
+            d_loss = loss_function(
                 real_output,
                 fake_output,
                 real_labels,
@@ -105,8 +105,7 @@ class CGANTrainer(BaseTrainer):
                 epoch=i,
             )  # Compute loss for fake images
 
-            d_loss_real.backward()  # Backpropagate the loss for real images
-            g_loss_fake.backward()  # Backpropagate the loss for fake images
+            d_loss.backward()  # Backpropagate the loss for real images
             optimizer_d.step()  # Update discriminator weights
 
             # Train Generator
@@ -138,10 +137,10 @@ class CGANTrainer(BaseTrainer):
                     self.config["training"]["num_epochs"],
                     i,
                     len(dataloader),
-                    d_loss_real.item() + g_loss_fake.item(),
+                    d_loss.item() ,
                     g_loss.item(),
                 )
-        return d_loss_real.item() + g_loss_fake.item(), g_loss.item()
+        return d_loss.item(), g_loss.item()
 
     def train(self, early_stop=True, patience=5, save_loss=True, gen_images=False):
         """

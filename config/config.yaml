@@ -37,11 +37,11 @@ training:
   save_loss: True                 # Save loss history?
   save_model_per_epoch: False     # Save model per epoch?
   gen_images_per_epoch: True      # Generate images per epoch?
-  log_interval: 10                # Log interval
+  log_interval: 11                # Log interval
   use_lecam: True                 # Use LeCam regularizer?
-  lecam_ratio: 0.001              # LeCam regularizer ratio
+  lecam_ratio: 0.1              # LeCam regularizer ratio
   init_ema: 100                   # Init EMA value when start
-  decay_ema: 0.999                # EMA decay rate
-  start_epoch_ema: 100            # Start EMA after n epochs
+  decay_ema: 0.9                  # EMA decay rate
+  start_epoch_ema: 10            # Start EMA after n epochs
   n_critic: 5                     # Number of critic updates per generator update (only for WGAN)
   lambda_gp: 1                    # Gradient penalty coefficient (only for WGAN)

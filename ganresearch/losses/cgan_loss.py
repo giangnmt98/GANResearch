@@ -60,7 +60,12 @@ class CGANLoss(Losses):
             # Compute the BCE loss between output and real labels
             d_loss_real = loss_fn(real_output, real_labels)
             g_loss_fake = loss_fn(fake_output, fake_labels)
-            return d_loss_real, g_loss_fake
+            if self.use_lecam and self.lecam_ratio > 0 and epoch > self.ema.start_epoch:
+                # Apply LeCam regularization if conditions are met
+                loss_lecam = self.lecam_reg(d_loss_real, g_loss_fake) * self.lecam_ratio
+            else:
+                loss_lecam = torch.tensor(0.0)
+            return d_loss_real + g_loss_fake + loss_lecam
         else:
             # Compute the BCE loss between output and real labels
             g_loss = loss_fn(fake_output, real_labels)
