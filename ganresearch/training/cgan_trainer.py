@@ -143,7 +143,7 @@ class CGANTrainer(BaseTrainer):
                 )
         return d_loss_real.item() + g_loss_fake.item(), g_loss.item()
 
-    def train(self, early_stop=False, patience=5, save_loss=True, gen_images=False):
+    def train(self, early_stop=True, patience=5, save_loss=True, gen_images=False):
         """
         Train the GAN model over a specified number of epochs.
 
@@ -185,6 +185,7 @@ class CGANTrainer(BaseTrainer):
             )
 
             # Log information about the current epoch
+            logger.info("=" * 50)
             logger.info(
                 f"Epoch [{epoch}/{num_epochs}], "
                 f"Disc Loss: {disc_loss:.4f}, Gen Loss: {gen_loss:.4f}"
