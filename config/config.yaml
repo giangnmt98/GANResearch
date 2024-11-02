@@ -4,9 +4,10 @@ dataset:
   data_path: "./data"             # Data path
   image_size: 64                  # Image size after resize
   channels: 3                     # Number of image channels (mnist: 1, cifar10: 3, ...)
-  select_class_id: [0, 4, 7, 9, 14, 18, 28, 35, 36, 41]  # Select class id for custom dataset
+  select_class_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # Select class id for custom dataset
   num_classes: 10                 # Number of classes (mnist: 10, cifar10: 10, gtrsb: 43, flowers102: 102, imagenet: 1000, custom: ?)
-  class_imbalance_ratio: {}       # Class imbalance ratio
+  class_imbalance_ratio: {"0":0.9, "1":0.9, "2":0.9, "3":0.9,
+                          "4":0.9, "5":0.9, "6":0.9, "7":0.9, "8":0.9, "9":0.9}       # Class imbalance ratio
   split_ratio:                    # Train/validation/test split ratios
     train: 0.8
     validation: 0.1

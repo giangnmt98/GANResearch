@@ -28,10 +28,14 @@ def create_trainer(config, model, train_loader, val_loader, save_path):
 
 def prepare_save_path(config):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    use_lc = "non_lc"
+    if config["training"]["use_lecam"]:
+        use_lc = "lc_" + str(config["training"]["lecam_ratio"])
     save_path = os.path.join(
         config["model"]["save_path"],
         config["model"]["name"],
         config["dataset"]["type"],
+        use_lc,
         timestamp,
     )
     os.makedirs(save_path, exist_ok=True)

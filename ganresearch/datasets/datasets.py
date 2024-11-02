@@ -43,12 +43,10 @@ class BaseDataLoaderConfig:
         """
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
-    from collections import defaultdict
 
     def select_class_id(self, dataset):
         select_class_id = set(self.config["dataset"]["select_class_id"])
         class_imbalance_ratio = self.config["dataset"].get("class_imbalance_ratio", {})
-
         if select_class_id:
             # Dictionary to hold indices grouped by class
             class_indices = defaultdict(list)
@@ -66,7 +64,7 @@ class BaseDataLoaderConfig:
 
             for class_id, idx_list in class_indices.items():
                 original_count = len(idx_list)
-                ratio = class_imbalance_ratio.get(class_id, 1.0)
+                ratio = class_imbalance_ratio.get(str(class_id), 1.0)
                 num_samples = int(original_count * ratio)
                 sampled_indices = (
                     random.sample(idx_list, num_samples) if ratio < 1.0 else idx_list
@@ -103,7 +101,6 @@ class BaseDataLoaderConfig:
             remapped_dataset = [
                 (img, class_mapping[label]) for img, label in filtered_dataset
             ]
-
             return remapped_dataset
         else:
             return dataset
