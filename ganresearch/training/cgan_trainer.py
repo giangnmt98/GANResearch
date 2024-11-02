@@ -79,13 +79,8 @@ class CGANTrainer(BaseTrainer):
             fake_labels = torch.full(
                 (batch_size,), 0, dtype=torch.float, device=device
             )  # Fake labels
-
             # Discriminator output on real images
-            output = discriminator(real_images, labels).view(-1)
-            d_loss_real = loss_function(
-                output, real_labels
-            )  # Compute loss for real images
-            d_loss_real.backward()  # Backpropagate the loss for real images
+            real_output = discriminator(real_images, labels).view(-1)
 
             # Generate noise for fake images
             noise = torch.randn(
@@ -98,22 +93,35 @@ class CGANTrainer(BaseTrainer):
             fake_images = generator(
                 noise, labels
             )  # Use generator to create fake images
-
             # Discriminator output on fake images
-            output = discriminator(fake_images.detach(), labels).view(-1)
-            g_loss_fake = loss_function(
-                output, fake_labels
-            )  # Compute loss for fake images
-            g_loss_fake.backward()  # Backpropagate the loss for fake images
+            fake_output = discriminator(fake_images.detach(), labels).view(-1)
 
+            g_loss_fake, d_loss_real = loss_function(
+                real_output,
+                fake_output,
+                real_labels,
+                fake_labels,
+                is_discriminator=True,
+                epoch=i,
+            )  # Compute loss for fake images
+
+            d_loss_real.backward()  # Backpropagate the loss for real images
+            g_loss_fake.backward()  # Backpropagate the loss for fake images
             optimizer_d.step()  # Update discriminator weights
 
             # Train Generator
             generator.zero_grad()  # Zero the gradients
-            output = discriminator(fake_images, labels).view(
+            fake_output = discriminator(fake_images, labels).view(
                 -1
             )  # Discriminator output on fake images
-            g_loss = loss_function(output, real_labels)  # Compute loss for generator
+            g_loss = loss_function(
+                real_output,
+                fake_output,
+                real_labels,
+                fake_labels,
+                is_discriminator=False,
+                epoch=i,
+            )  # Compute loss for generator
             g_loss.backward()  # Backpropagate the generator loss
             optimizer_g.step()  # Update generator weights
 
@@ -163,7 +171,7 @@ class CGANTrainer(BaseTrainer):
         g_loss_total = 0
         # Progress bar for training process
         for epoch in range(1, num_epochs + 1):
-            gen_loss, disc_loss = self._train_one_epoch(
+            disc_loss, gen_loss = self._train_one_epoch(
                 epoch,
                 self.train_loader,
                 self.model.discriminator,
@@ -176,10 +184,10 @@ class CGANTrainer(BaseTrainer):
                 g_loss_total,
             )
 
-            # Log info about the current epoch
+            # Log information about the current epoch
             logger.info(
                 f"Epoch [{epoch}/{num_epochs}], "
-                f"Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}"
+                f"Disc Loss: {disc_loss:.4f}, Gen Loss: {gen_loss:.4f}"
             )
 
             # Append loss history for plotting
@@ -189,23 +197,10 @@ class CGANTrainer(BaseTrainer):
             fid_score = run_eval_on_train(
                 config=self.config,
                 generator=self.model.generator,
-                dataloader=self.train_loader,
+                dataloader=self.val_loader,
                 has_labels=True,
             )
             logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
-
-            # Early stopping logic
-            # if early_stop:
-            #     avg_loss = (gen_loss + disc_loss) / 2
-            #     if avg_loss < best_loss:
-            #         best_loss = avg_loss
-            #         no_improvement_count = 0  # Reset if improvement occurs
-            #     else:
-            #         no_improvement_count += 1
-            #         logger.info(f"No improvement for {no_improvement_count} epoch(s).")
-            #         if no_improvement_count >= patience:
-            #             logger.info("Early stopping triggered.")
-            #             break
 
             # Early stopping logic based on FID
             if early_stop:
@@ -223,8 +218,9 @@ class CGANTrainer(BaseTrainer):
 
             # Save model at each 'save_interval' epoch
             if epoch % self.config["training"].get("save_interval", 100) == 0:
-                self.save_models(self.save_path, model_name=f"epoch_{epoch}")
-                if gen_images:
+                if self.config["training"]["save_model_per_epoch"]:
+                    self.save_models(self.save_path, model_name=f"epoch_{epoch}")
+                if self.config["training"]["gen_images_per_epoch"]:
                     labels = torch.randint(
                         0,
                         10,

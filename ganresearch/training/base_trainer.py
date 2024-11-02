@@ -117,7 +117,7 @@ class BaseTrainer:
 
         # Training loop with progress bar
         for epoch in range(1, num_epochs + 1):
-            gen_loss, disc_loss = self._train_one_epoch(
+            disc_loss, gen_loss = self._train_one_epoch(
                 epoch,
                 self.train_loader,
                 self.model.discriminator,
@@ -133,7 +133,7 @@ class BaseTrainer:
             # Log information about the current epoch
             logger.info(
                 f"Epoch [{epoch}/{num_epochs}], "
-                f"Gen Loss: {gen_loss:.4f}, Disc Loss: {disc_loss:.4f}"
+                f"Disc Loss: {disc_loss:.4f}, Gen Loss: {gen_loss:.4f}"
             )
 
             # Save loss history for plotting
@@ -146,19 +146,6 @@ class BaseTrainer:
                 dataloader=self.train_loader,
             )
             logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
-
-            # Early stopping logic
-            # if early_stop:
-            #     avg_loss = (gen_loss + disc_loss) / 2
-            #     if avg_loss < best_loss:
-            #         best_loss = avg_loss
-            #         no_improvement_count = 0  # Reset if improvement occurs
-            #     else:
-            #         no_improvement_count += 1
-            #         logger.info(f"No improvement for {no_improvement_count} epoch(s).")
-            #         if no_improvement_count >= patience:
-            #             logger.info("Early stopping triggered.")
-            #             break
 
             # Early stopping logic based on FID
             if early_stop:
@@ -176,8 +163,9 @@ class BaseTrainer:
 
             # Save model every 'save_interval' epochs
             if epoch % self.config["training"].get("save_interval", 100) == 0:
-                self.save_models(self.save_path, model_name=f"epoch_{epoch}")
-                if gen_images:
+                if self.config["training"]["save_model_per_epoch"]:
+                    self.save_models(self.save_path, model_name=f"epoch_{epoch}")
+                if self.config["training"]["gen_images_per_epoch"]:
                     # Generate and save images
                     fake = self.model.generator(
                         torch.randn(

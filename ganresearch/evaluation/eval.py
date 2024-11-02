@@ -384,7 +384,6 @@ def run_eval_on_train(
     inception_model = create_inception_model(device)
 
     # Collect features for real and generated (fake) images
-    logger.info("Calculating FID score for all classes...")
     real_features = extract_features(
         dataloader,
         generator=generator,
@@ -408,5 +407,4 @@ def run_eval_on_train(
     # Calculate FID score for all classes combined
     fid_score = calculate_fid_score(real_features, fake_features)
     logger.info(f"FID score for all classes: {fid_score}")
-
     return fid_score

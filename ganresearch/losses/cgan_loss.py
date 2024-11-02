@@ -3,6 +3,7 @@ This module defines the CGANLoss class, which extends the Losses class to
 calculate the loss for Conditional GANs (CGANs).
 """
 
+import torch
 import torch.nn as nn
 
 from ganresearch.losses.losses import Losses
@@ -26,7 +27,15 @@ class CGANLoss(Losses):
         """
         super().__init__(config)
 
-    def calculate_loss(self, output, real_labels):
+    def calculate_loss(
+        self,
+        real_output,
+        fake_output,
+        real_labels,
+        fake_labels,
+        is_discriminator=True,
+        epoch=None,
+    ):
         """
         Calculate the Binary Cross-Entropy loss between the model output and
         real labels.
@@ -43,6 +52,16 @@ class CGANLoss(Losses):
 
         # Initialize the BCE loss function
         loss_fn = nn.BCELoss()
-
-        # Compute the BCE loss between output and real labels
-        return loss_fn(output, real_labels)
+        if is_discriminator:
+            if self.ema is not None:
+                # Track the prediction mean for both real and fake outputs
+                self.ema.update(torch.mean(fake_output).item(), "D_fake", epoch)
+                self.ema.update(torch.mean(real_output).item(), "D_real", epoch)
+            # Compute the BCE loss between output and real labels
+            d_loss_real = loss_fn(real_output, real_labels)
+            g_loss_fake = loss_fn(fake_output, fake_labels)
+            return d_loss_real, g_loss_fake
+        else:
+            # Compute the BCE loss between output and real labels
+            g_loss = loss_fn(fake_output, real_labels)
+            return g_loss

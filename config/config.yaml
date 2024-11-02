@@ -35,8 +35,10 @@ training:
   early_stop: False               # Enable early stopping?
   patience: 5                     # Patience for early stopping
   save_loss: True                 # Save loss history?
+  save_model_per_epoch: False     # Save model per epoch?
+  gen_images_per_epoch: True      # Generate images per epoch?
   log_interval: 10                # Log interval
-  use_lecam: False                # Use LeCam regularizer?
+  use_lecam: True                 # Use LeCam regularizer?
   lecam_ratio: 0.001              # LeCam regularizer ratio
   init_ema: 100                   # Init EMA value when start
   decay_ema: 0.999                # EMA decay rate
