@@ -224,9 +224,12 @@ class BaseTrainer:
         Returns:
             None
         """
-        torch.save(self.model.generator, f"{save_path}/generator_{model_name}.pth")
+        use_lc = "non_lc"
+        if self.config["training"]["use_lecam"]:
+            use_lc = "lc_" + str(self.config["training"]["lecam_ratio"])
+        torch.save(self.model.generator, f"{save_path}/{use_lc}/generator_{model_name}.pth")
         torch.save(
-            self.model.discriminator, f"{save_path}/discriminator_{model_name}.pth"
+            self.model.discriminator, f"{save_path}/{use_lc}/discriminator_{model_name}.pth"
         )
         logger.info(f"Models saved at {save_path}")
 
