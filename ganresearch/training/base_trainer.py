@@ -8,6 +8,7 @@ import torch
 import torchvision.utils as vutils
 from torch import nn
 
+from ganresearch.evaluation.eval import run_eval_on_train
 from ganresearch.training.optimizer import Optimizer
 from ganresearch.utils.utils import create_logger
 
@@ -100,7 +101,7 @@ class BaseTrainer:
             None
         """
         num_epochs = self.config["training"]["num_epochs"]
-        best_loss = float("inf")
+        best_fid = float("inf")
         no_improvement_count = 0
 
         # Initialize weights for generator and discriminator
@@ -139,17 +140,38 @@ class BaseTrainer:
             self.gen_loss_history.append(gen_loss)
             self.disc_loss_history.append(disc_loss)
 
+            fid_score = run_eval_on_train(
+                config=self.config,
+                generator=self.model.generator,
+                dataloader=self.train_loader,
+            )
+            logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
+
             # Early stopping logic
+            # if early_stop:
+            #     avg_loss = (gen_loss + disc_loss) / 2
+            #     if avg_loss < best_loss:
+            #         best_loss = avg_loss
+            #         no_improvement_count = 0  # Reset if improvement occurs
+            #     else:
+            #         no_improvement_count += 1
+            #         logger.info(f"No improvement for {no_improvement_count} epoch(s).")
+            #         if no_improvement_count >= patience:
+            #             logger.info("Early stopping triggered.")
+            #             break
+
+            # Early stopping logic based on FID
             if early_stop:
-                avg_loss = (gen_loss + disc_loss) / 2
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
+                if fid_score < best_fid:
+                    best_fid = fid_score
                     no_improvement_count = 0  # Reset if improvement occurs
                 else:
                     no_improvement_count += 1
-                    logger.info(f"No improvement for {no_improvement_count} epoch(s).")
+                    logger.info(
+                        f"No improvement in FID for {no_improvement_count} epoch(s)."
+                    )
                     if no_improvement_count >= patience:
-                        logger.info("Early stopping triggered.")
+                        logger.info("Early stopping triggered due to FID.")
                         break
 
             # Save model every 'save_interval' epochs

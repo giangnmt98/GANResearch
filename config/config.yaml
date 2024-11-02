@@ -4,7 +4,7 @@ dataset:
   data_path: "./data"             # Data path
   image_size: 64                  # Image size after resize
   channels: 3                     # Number of image channels (mnist: 1, cifar10: 3, ...)
-  select_class_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # Select class id for custom dataset
+  select_class_id: [0, 4, 7, 9, 14, 18, 28, 35, 36, 41]  # Select class id for custom dataset
   num_classes: 10                 # Number of classes (mnist: 10, cifar10: 10, gtrsb: 43, flowers102: 102, imagenet: 1000, custom: ?)
   class_imbalance_ratio: {}       # Class imbalance ratio
   split_ratio:                    # Train/validation/test split ratios
@@ -30,7 +30,7 @@ training:
   ndf: 64                         # Discriminator feature map size
   learning_rate: 0.0002           # Learning rate
   beta1: 0.5                      # Beta1 parameter for Adam optimizer
-  num_epochs: 1                   # Number of epochs
+  num_epochs: 25                    # Number of epochs
   save_interval: 1                # Save model every n iterations
   early_stop: False               # Enable early stopping?
   patience: 5                     # Patience for early stopping

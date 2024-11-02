@@ -170,15 +170,21 @@ def calculate_inception_score(generated_images, inception_model, splits=10):
             pred = F.softmax(inception_model(img), dim=1).cpu().numpy()
             preds.append(pred)
     preds = np.concatenate(preds, axis=0)
-    # Calculate Inception Score in splits
     split_scores = []
+    from scipy.stats import entropy
+
+    # Split the data into `splits` parts and calculate IS for each part
     for k in range(splits):
-        part = preds[k * (len(preds) // splits) : (k + 1) * (len(preds) // splits)]
-        p_yx = part.mean(axis=0)
-        split_score = np.exp(
-            np.mean([np.sum(p * (np.log(p) - np.log(p_yx))) for p in part])
-        )
-        split_scores.append(split_score)
+        part = preds[
+            k * (preds.shape[0] // splits) : (k + 1) * (preds.shape[0] // splits), :
+        ]
+        py = np.mean(part, axis=0)
+        scores = []
+        for i in range(part.shape[0]):
+            pyx = part[i, :]
+            scores.append(entropy(pyx, py))
+        split_scores.append(np.exp(np.mean(scores)))
+
     return np.mean(split_scores), np.std(split_scores)
 
 
@@ -190,6 +196,7 @@ def run_eval(
     save_path=None,
     gen_image=False,
     has_labels=False,
+    only_fid=False,
 ):
     """
     Run evaluation of GAN performance by calculating FID and Inception scores.
@@ -214,7 +221,6 @@ def run_eval(
             generator = load_generator(os.path.join(save_path, "generator.pth"))
         else:
             logger.error("Please provide the path to the saved generator model.")
-
     noise_dimension = config["training"]["noise_dimension"]
     device = config["training"]["device"]
     inception_model = create_inception_model(device)
@@ -242,28 +248,34 @@ def run_eval(
             has_labels,
         )
         fid_score = calculate_fid_score(real_features, fake_features)
-
-        if has_labels:
-            labels = torch.randint(0, len(list_class), (100,), device=device)
-            generated_images = [
-                generator(
-                    torch.randn(1, noise_dimension, 1, 1, device=device),
-                    labels[i].unsqueeze(0),
-                )
-                for i in range(100)
-            ]
+        if not only_fid:
+            if has_labels:
+                labels = torch.randint(0, len(list_class), (100,), device=device)
+                generated_images = [
+                    generator(
+                        torch.randn(1, noise_dimension, 1, 1, device=device),
+                        labels[i].unsqueeze(0),
+                    )
+                    for i in range(100)
+                ]
+            else:
+                generated_images = [
+                    generator(torch.randn(1, noise_dimension, 1, 1, device=device))
+                    for _ in range(100)
+                ]
+            inception_score, inception_score_std = calculate_inception_score(
+                generated_images, inception_model
+            )
+            # Store FID and IS data for this class
+            list_scores.append(
+                {
+                    "Class": class_idx,
+                    "FID Score": fid_score,
+                    "IS Score": inception_score,
+                }
+            )
         else:
-            generated_images = [
-                generator(torch.randn(1, noise_dimension, 1, 1, device=device))
-                for _ in range(100)
-            ]
-        inception_score, inception_score_std = calculate_inception_score(
-            generated_images, inception_model
-        )
-        # Store FID and IS data for this class
-        list_scores.append(
-            {"Class": class_idx, "FID Score": fid_score, "IS Score": inception_score}
-        )
+            return fid_score
     df = pd.DataFrame(list_scores)
     logger.info(f"Scores for each class: \n{df}")
     logger.info("Saving scores to %s" % os.path.join(save_path, "scores.csv"))
@@ -286,3 +298,115 @@ def run_eval(
         vutils.save_image(
             generated_images, os.path.join(save_path, "generated_images.png"), nrow=10
         )
+
+
+def extract_features(
+    dataloader,
+    generator,
+    inception_model,
+    noise_dimension,
+    device,
+    has_labels=False,
+    real_images=True,
+):
+    """
+    Extract features from a given dataloader for either real or generated images
+    using a specified model.
+
+    Args:
+        dataloader (DataLoader): Dataloader with images (and labels if `has_labels` is True).
+        generator (torch.nn.Module): GAN generator model.
+        inception_model (torch.nn.Module): Inception V3 model for feature extraction.
+        noise_dimension (int): Dimension of noise vector for the generator.
+        device (torch.device): Device to perform computations on.
+        has_labels (bool, optional): Whether the dataloader provides labels.
+                                     Defaults to False.
+        real_images (bool, optional): If True, extracts features
+        for real images from the dataloader;
+                                      if False, generates images using the generator.
+
+    Returns:
+        np.ndarray: Extracted features for all images in the dataloader.
+    """
+    inception_model.eval()
+    features = []
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            if real_images:
+                # Use real images directly from dataloader
+                inputs = inputs.to(device)
+            else:
+                # Generate fake images using random noise
+                noise = torch.randn(
+                    inputs.size(0), noise_dimension, 1, 1, device=device
+                )
+                if has_labels:
+                    inputs = generator(noise, labels.to(device))
+                else:
+                    inputs = generator(noise)
+
+            # Ensure images are 3-channel (convert grayscale if needed)
+            if inputs.size(1) == 1:
+                inputs = inputs.repeat(1, 3, 1, 1)  # Convert grayscale to RGB
+
+            # Resize images to 299x299 for Inception model
+            inputs = F.interpolate(
+                inputs, size=(299, 299), mode="bilinear", align_corners=False
+            )
+
+            # Extract features using the Inception model
+            outputs = inception_model(inputs)
+            features.append(outputs.cpu().numpy())
+
+    return np.concatenate(features, axis=0)
+
+
+def run_eval_on_train(
+    config,
+    generator,
+    dataloader,
+    has_labels=False,
+):
+    """
+    Run evaluation of GAN performance by calculating FID and Inception scores.
+
+    Args:
+        config (dict): Configuration dictionary.
+        generator (torch.nn.Module): Generator model to evaluate.
+        dataloader (DataLoader): DataLoader providing images and labels.
+        has_labels (bool, optional): Whether the dataloader provides labels.
+                                     Defaults to False.
+
+    """
+    noise_dimension = config["training"]["noise_dimension"]
+    device = config["training"]["device"]
+    inception_model = create_inception_model(device)
+
+    # Collect features for real and generated (fake) images
+    logger.info("Calculating FID score for all classes...")
+    real_features = extract_features(
+        dataloader,
+        generator=generator,
+        noise_dimension=noise_dimension,
+        inception_model=inception_model,
+        device=device,
+        has_labels=has_labels,
+        real_images=True,
+    )
+
+    fake_features = extract_features(
+        dataloader,
+        generator=generator,
+        noise_dimension=noise_dimension,
+        inception_model=inception_model,
+        device=device,
+        has_labels=has_labels,
+        real_images=False,
+    )
+
+    # Calculate FID score for all classes combined
+    fid_score = calculate_fid_score(real_features, fake_features)
+    logger.info(f"FID score for all classes: {fid_score}")
+
+    return fid_score

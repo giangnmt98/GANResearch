@@ -43,10 +43,10 @@ class BaseDataLoaderConfig:
         """
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
+    from collections import defaultdict
+
     def select_class_id(self, dataset):
-        select_class_id = set(
-            self.config["dataset"]["select_class_id"]
-        )  # Convert to set for faster lookups
+        select_class_id = set(self.config["dataset"]["select_class_id"])
         class_imbalance_ratio = self.config["dataset"].get("class_imbalance_ratio", {})
 
         if select_class_id:
@@ -61,17 +61,12 @@ class BaseDataLoaderConfig:
             # Create a list to store the final sampled indices
             indices = []
 
-            # Process each class according to its imbalance ratio
             # Dictionary to store the original and new sample counts for each class
             sample_counts = {}
 
             for class_id, idx_list in class_indices.items():
-                original_count = len(
-                    idx_list
-                )  # Original number of samples for this class
-                ratio = class_imbalance_ratio.get(
-                    class_id, 1.0
-                )  # Default to 1.0 if not specified
+                original_count = len(idx_list)
+                ratio = class_imbalance_ratio.get(class_id, 1.0)
                 num_samples = int(original_count * ratio)
                 sampled_indices = (
                     random.sample(idx_list, num_samples) if ratio < 1.0 else idx_list
@@ -85,7 +80,7 @@ class BaseDataLoaderConfig:
                     "ratio": ratio,
                 }
 
-            # logger.info the results outside the loop
+            # Log the sample counts
             logger.info("\nSample Counts by Class:")
             logger.info("Class | Original Samples | Selected Samples | Ratio")
             logger.info("-----------------------------------------------------")
@@ -95,9 +90,21 @@ class BaseDataLoaderConfig:
                     f"{counts['ratio']:>5.2f}"
                 )
 
-            # Create a subset dataset with the sampled indices
+            # Remap class labels to sequential IDs
+            sorted_class_ids = sorted(select_class_id)  # Sort to get sequential order
+            class_mapping = {
+                old_id: new_id for new_id, old_id in enumerate(sorted_class_ids)
+            }
+
+            # Create a subset dataset with the sampled indices and remap class labels
             filtered_dataset = Subset(dataset, indices)
-            return filtered_dataset
+
+            # Apply the new class IDs
+            remapped_dataset = [
+                (img, class_mapping[label]) for img, label in filtered_dataset
+            ]
+
+            return remapped_dataset
         else:
             return dataset
 
