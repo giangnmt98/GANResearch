@@ -49,7 +49,13 @@ class BaseDataLoaderConfig:
             class_indices = defaultdict(list)
 
             # Group all indices by their class labels in one loop
-            for i, (_, label) in enumerate(dataset):
+            for i, (_, labels) in enumerate(dataset):
+                if isinstance(labels, torch.Tensor):
+                    for label in labels:  # Iterate through each label in the batch
+                        if isinstance(label, torch.Tensor):
+                            label = label.item()
+                else:
+                    label = labels
                 if label in select_class_id:
                     class_indices[label].append(i)
 
@@ -279,6 +285,12 @@ class StandfordDogsDataset(BaseDataLoaderConfig):
         self.dataset = None  # Placeholder for loaded dataset
         self.data = None  # Placeholder for loaded data
         self.load_dataset()
+        self.dataset = self.initialize_dataset()
+
+    def initialize_dataset(self):
+        return self.select_class_id(
+            DataLoader(self.dataset, batch_size=self.batch_size, shuffle=self.shuffle)
+        )
 
     def load_dataset(self):
         """
@@ -335,8 +347,8 @@ class StandfordDogsDataset(BaseDataLoaderConfig):
         Returns:
             torch.utils.data.DataLoader: DataLoader for the loaded dataset.
         """
-        return DataLoader(
-            self.dataset, batch_size=self.batch_size, shuffle=self.shuffle
+        return self.select_class_id(
+            DataLoader(self.dataset, batch_size=self.batch_size, shuffle=self.shuffle)
         )
 
     def __len__(self):

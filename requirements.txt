@@ -16,3 +16,5 @@ types-PyYAML==6.0.12.12
 colorlog==6.8.2
 pandas===2.2.3
 pyyaml
+torchmetrics[image]
+torchmetrics

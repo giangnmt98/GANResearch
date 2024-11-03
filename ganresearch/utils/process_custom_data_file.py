@@ -1,7 +1,7 @@
 import os
 
 # Path to the main directory containing subdirectories
-main_dir = "./data/Stanford Dogs Dataset"
+main_dir = "./data/chest_xray/train"
 
 
 def rename_folder(main_dir):
@@ -80,8 +80,8 @@ def rename_files_sequentially(base_dir):
 # # Rename folders
 # rename_folder(main_dir)
 #
-# # Remove Zone.Identifier files
-# remove_zone_identifier_files(main_dir)
+# Remove Zone.Identifier files
+remove_zone_identifier_files(main_dir)
 
-# # Rename files sequentially
-# rename_files_sequentially(main_dir)
+# Rename files sequentially
+rename_files_sequentially(main_dir)

@@ -1,7 +1,7 @@
 # Dataset Configuration
 dataset:
-  type: "standford_dogs"                   # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, standford_dogs)
-  data_path: "data/Stanford Dogs Dataset/StanfordDogsDataset.pt"             # Data path
+  type: "gtrsb"                   # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, standford_dogs)
+  data_path: "data"             # Data path
   image_size: 64                  # Image size after resize
   channels: 3                     # Number of image channels (mnist: 1, cifar10: 3, ...)
   select_class_id: [0,1,2,3,4,5,6,7]  # Select class id for custom dataset
