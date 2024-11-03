@@ -194,16 +194,15 @@ class CGANTrainer(BaseTrainer):
             self.gen_loss_history.append(gen_loss)
             self.disc_loss_history.append(disc_loss)
 
-            fid_score = run_eval_on_train(
-                config=self.config,
-                generator=self.model.generator,
-                dataloader=self.val_loader,
-                has_labels=True,
-            )
-            logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
-
             # Early stopping logic based on FID
             if early_stop:
+                fid_score = run_eval_on_train(
+                    config=self.config,
+                    generator=self.model.generator,
+                    dataloader=self.val_loader,
+                    has_labels=True,
+                )
+                logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
                 if fid_score < best_fid:
                     best_fid = fid_score
                     no_improvement_count = 0  # Reset if improvement occurs
