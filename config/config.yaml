@@ -1,11 +1,11 @@
 # Dataset Configuration
 dataset:
-  type: "gtrsb"                   # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, standford_dogs)
+  type: "cifar10"                   # Dataset type (mnist, cifar10, cifar100, gtrsb, flowers102, imagenet, standford_dogs)
   data_path: "data"             # Data path
   image_size: 64                  # Image size after resize
   channels: 3                     # Number of image channels (mnist: 1, cifar10: 3, ...)
-  select_class_id: [0,1,2,3,4,5,6,7]  # Select class id for custom dataset
-  num_classes: 8                 # Number of classes (mnist: 10, cifar10: 10, gtrsb: 43, flowers102: 102, imagenet: 1000, custom: ?)
+  select_class_id: [0,1,2,3,4,5,6,7,8,9]  # Select class id for custom dataset
+  num_classes: 10                 # Number of classes (mnist: 10, cifar10: 10, gtrsb: 43, flowers102: 102, imagenet: 1000, custom: ?)
   class_imbalance_ratio: {}
 #  class_imbalance_ratio: {"0":0.1, "1":0.1, "2":0.1, "3":0.1,
 #                          "4":0.2, "5":0.2, "6":0.3, "7":0.1, "8":0.01, "9":0.05}       # Class imbalance ratio
@@ -26,11 +26,11 @@ training:
   number_gpu: 1                   # Number of GPUs to use
   optimizer: "adam"               # Optimization algorithm (adam, rmsprop, sgd, adamw, nadam)
   batch_size: 64                  # Batch size
-  noise_dimension: 128            # Size of noise vector
+  noise_dimension: 100            # Size of noise vector
   latent_dim: 100                 # Size of latent dimension
   ngf: 64                         # Generator feature map size
   ndf: 64                         # Discriminator feature map size
-  learning_rate: 0.0001           # Learning rate
+  learning_rate: 0.0002           # Learning rate
   beta1: 0.5                      # Beta1 parameter for Adam optimizer
   num_epochs: 25                    # Number of epochs
   save_interval: 1                # Save model every n iterations

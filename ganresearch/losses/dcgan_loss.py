@@ -5,7 +5,6 @@ discriminator and the generator.
 """
 
 import torch
-import torch.nn as nn
 
 from ganresearch.losses.losses import Losses
 
@@ -21,7 +20,14 @@ class DCGANLoss(Losses):
         super().__init__(config)
 
     def calculate_loss(
-        self, real_output, fake_output, is_discriminator=True, epoch=None
+        self,
+        real_loss,
+        fake_loss,
+        real_output,
+        fake_output,
+        g_loss=None,
+        is_discriminator=True,
+        epoch=None,
     ):
         """
         Calculate the loss for the DCGAN model.
@@ -42,31 +48,16 @@ class DCGANLoss(Losses):
             ValueError: If EMA is used without specifying 'epoch'.
         """
 
-        # Binary Cross Entropy loss function
-        criterion = nn.BCELoss()
+        if self.ema is not None:
+            # Track the prediction mean for both real and fake outputs
+            self.ema.update(torch.mean(fake_output).item(), "D_fake", epoch)
+            self.ema.update(torch.mean(real_output).item(), "D_real", epoch)
 
-        if is_discriminator:
-            if self.ema is not None:
-                # Track the prediction mean for both real and fake outputs
-                self.ema.update(torch.mean(fake_output).item(), "D_fake", epoch)
-                self.ema.update(torch.mean(real_output).item(), "D_real", epoch)
-
-            # For discriminator: maximize log(D(x)) + log(1 - D(G(z)))
-            real_labels = torch.ones_like(real_output)  # Labels for real images
-            fake_labels = torch.zeros_like(fake_output)  # Labels for fake images
-            real_loss = criterion(real_output, real_labels)
-            fake_loss = criterion(fake_output, fake_labels)
-
-            if self.use_lecam and self.lecam_ratio > 0 and epoch > self.ema.start_epoch:
-                # Apply LeCam regularization if conditions are met
-                loss_lecam = self.lecam_reg(real_loss, fake_loss) * self.lecam_ratio
-            else:
-                loss_lecam = torch.tensor(0.0)
-
-            # Total loss for the discriminator
-            return real_loss + fake_loss + loss_lecam
-
+        if self.use_lecam and self.lecam_ratio > 0 and epoch > self.ema.start_epoch:
+            # Apply LeCam regularization if conditions are met
+            loss_lecam = self.lecam_reg(real_loss, fake_loss) * self.lecam_ratio
         else:
-            # For generator: minimize log(1 - D(G(z))) / equivalently maximize log(D(G(z)))
-            real_labels = torch.ones_like(fake_output)  # Labels should be real
-            return criterion(fake_output, real_labels)
+            loss_lecam = torch.tensor(0.0)
+
+        # Total loss for the discriminator
+        return real_loss + fake_loss + loss_lecam

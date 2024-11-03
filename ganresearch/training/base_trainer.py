@@ -128,6 +128,7 @@ class BaseTrainer:
                 self.ema_losses,
                 self.device,
                 g_loss_total,
+                criterion=nn.BCELoss(),
             )
 
             # Log information about the current epoch

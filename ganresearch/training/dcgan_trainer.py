@@ -39,6 +39,9 @@ class DCGANTrainer(BaseTrainer):
         ema_losses: any,
         device: torch.device,
         g_loss_total: float,
+        real_label=1,
+        fake_label=0,
+        criterion=None,
     ) -> tuple[float, float]:
         """
         Train one epoch of the GAN model.
@@ -59,46 +62,46 @@ class DCGANTrainer(BaseTrainer):
         tuple[float, float]: Discriminator and generator loss for the epoch.
         """
         # Add tqdm to dataloader to show progress for each epoch
+
         for i, data in enumerate(dataloader):
-            discriminator.zero_grad()  # Zero the gradients for discriminator
-            real_in_cpu = data[0].to(device)  # Move real images to specified device
-            batch_size = real_in_cpu.size(0)  # Get the current batch size
+            discriminator.zero_grad()
+            real_cpu = data[0].to(device)
+            batch_size = real_cpu.size(0)
+            label = torch.full(
+                (batch_size,), real_label, dtype=real_cpu.dtype, device=device
+            )
 
-            # Train with real images
-            real_output = discriminator(
-                real_in_cpu
-            )  # Discriminator output for real images
+            real_output = discriminator(real_cpu)
+            real_loss = criterion(real_output, label)
+            real_loss.backward()
 
-            # Generate fake images
+            # train with fake
             noise = torch.randn(
                 batch_size,
                 self.config["training"]["noise_dimension"],
                 1,
                 1,
                 device=device,
-            )  # Create noise vector
-            fake = generator(noise).detach()  # Generate fake images and detach
-            fake_output = discriminator(fake)  # Discriminator output for fake images
-
-            # Calculate discriminator loss
-            d_loss = loss_function(
-                real_output,
-                fake_output,
-                is_discriminator=True,
-                epoch=i,
             )
-            d_loss.backward()  # Backpropagate discriminator loss
-            optimizer_d.step()  # Update discriminator weights
+            fake = generator(noise)
+            label.fill_(fake_label)
+            fake_output = discriminator(fake.detach())
+            fake_loss = criterion(fake_output, label)
+            fake_loss.backward()
+            d_loss = loss_function(
+                real_loss, fake_loss, real_output, fake_output, epoch=i
+            )
+            optimizer_d.step()
 
-            generator.zero_grad()  # Zero the gradients for generator
-
-            # Calculate generator loss
-            fake_output = discriminator(
-                fake
-            )  # Get discriminator output for fake images
-            g_loss = loss_function(None, fake_output, is_discriminator=False)
-            g_loss.backward()  # Backpropagate generator loss
-            optimizer_g.step()  # Update generator weights
+            ############################
+            # (2) Update G network: maximize log(D(G(z)))
+            ###########################
+            generator.zero_grad()
+            label.fill_(real_label)  # fake labels are real for generator cost
+            output = discriminator(fake)
+            g_loss = criterion(output, label)
+            g_loss.backward()
+            optimizer_g.step()
 
             # Accumulate generator loss
             if ema_losses is not None:

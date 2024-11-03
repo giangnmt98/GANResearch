@@ -5,6 +5,7 @@ implementing Deep Convolutional Generative Adversarial Networks.
 
 from abc import ABC
 
+import torch
 import torch.nn as nn
 
 from ganresearch.models.base_gan import BaseGAN
@@ -31,9 +32,18 @@ class DCGAN(BaseGAN, ABC):
 
         # Initialize the discriminator model and move it to the specified device
         self.discriminator = Discriminator(self.config).to(self.device)
-
+        self.discriminator.apply(self.weights_init)
         # Initialize the generator model and move it to the specified device
         self.generator = Generator(self.config).to(self.device)
+        self.generator.apply(self.weights_init)
+
+    def weights_init(self, m):
+        classname = m.__class__.__name__
+        if classname.find("Conv") != -1:
+            torch.nn.init.normal_(m.weight, 0.0, 0.02)
+        elif classname.find("BatchNorm") != -1:
+            torch.nn.init.normal_(m.weight, 1.0, 0.02)
+            torch.nn.init.zeros_(m.bias)
 
 
 class Generator(nn.Module):
