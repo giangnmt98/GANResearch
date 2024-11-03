@@ -88,5 +88,6 @@ if __name__ == "__main__":
     # Read config file
     config = load_config(args.config)
 
-    # Run main program
-    main(config)
+    for i in range(5):
+        # Run main program
+        main(config)
