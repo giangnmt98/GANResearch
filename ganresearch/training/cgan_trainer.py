@@ -142,7 +142,7 @@ class CGANTrainer(BaseTrainer):
                 )
         return d_loss.item(), g_loss.item()
 
-    def train(self, early_stop=False, patience=5, save_loss=True, gen_images=False):
+    def train(self, early_stop=True, patience=5, save_loss=True, gen_images=False):
         """
         Train the GAN model over a specified number of epochs.
 
