@@ -148,9 +148,10 @@ class BaseTrainer:
                     config=self.config,
                     generator=self.model.generator,
                     dataloader=self.val_loader,
-                    has_labels=True,
+                    has_labels=False,
                 )
                 logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
+
                 if fid_score < best_fid:
                     best_fid = fid_score
                     no_improvement_count = 0  # Reset if improvement occurs
