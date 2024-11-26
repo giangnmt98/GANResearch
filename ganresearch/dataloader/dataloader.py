@@ -47,6 +47,7 @@ class DataLoaderManager:
             "cifar10": datasets.CIFAR10Dataset,
             "cifar100": datasets.CIFAR100Dataset,
             "gtrsb": datasets.GTSRBDataset,
+            "celeba": datasets.CelebADataset,
             "flowers102": datasets.Flowers102Dataset,
             "imagenet": datasets.ImageNetDataset,
             "standford_dogs": datasets.StandfordDogsDataset,

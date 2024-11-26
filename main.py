@@ -78,6 +78,8 @@ def main(config):
 
 
 
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GAN Training and Evaluation")
     parser.add_argument(

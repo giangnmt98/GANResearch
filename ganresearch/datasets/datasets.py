@@ -218,6 +218,30 @@ class GTSRBDataset(BaseDataLoaderConfig):
         return self.select_class_id(dataset)
 
 
+class CelebADataset(BaseDataLoaderConfig):
+    def __init__(self, root="./data", train=True, **kwargs):
+        """
+        Load CelebA dataset.
+        Args:
+            root (str): Root directory of dataset.
+            train (bool): Whether to use training or test split.
+        """
+        super().__init__(**kwargs)
+        self.dataset = self.initialize_dataset(root, train)
+
+    def initialize_dataset(self, root, train):
+        """
+        Initialize the GTSRB dataset.
+        Args:
+            root (str): Root directory of dataset.
+            train (bool): Whether to use training or test split.
+        Returns:
+            datasets.CelebA: The initialized GTSRB dataset.
+        """
+        dataset = datasets.CelebA(root=root, download=True, transform=self.transform)
+        return self.select_class_id(dataset)
+
+
 class Flowers102Dataset(BaseDataLoaderConfig):
     def __init__(self, root="./data", train=True, **kwargs):
         """

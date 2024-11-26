@@ -1,7 +1,7 @@
 import os
 
 # Path to the main directory containing subdirectories
-main_dir = "./data/chest_xray/train"
+main_dir = "/home/giang/testBigGAN/data/train_imbalance"
 
 
 def rename_folder(main_dir):

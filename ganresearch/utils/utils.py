@@ -11,6 +11,9 @@ import torch
 import yaml
 from PIL import Image, ImageDraw
 
+import pandas as pd
+from collections import Counter
+
 from ganresearch.utils.custom_logger import CustomLogger
 
 # Initialize the logger with the application name
@@ -282,3 +285,29 @@ def create_and_save_dataset(root_dir, output_file, transform):
     # Save the dataset to a .pt file
     torch.save(dataset, output_file)
     logger.info(f"Dataset saved to {output_file}")
+
+
+import pandas as pd
+from collections import Counter
+
+def log_class_distribution(dataloader, logger):
+    """
+    Hiển thị số lượng mẫu của mỗi class trong dataloader dưới dạng bảng.
+
+    Args:
+        dataloader (DataLoader): DataLoader cung cấp dataset.
+        logger (logging.Logger): Logger để ghi thông tin.
+    """
+    # Đếm số lượng nhãn
+    class_counter = Counter()
+    for _, labels in dataloader:
+        class_counter.update(labels.tolist())
+
+    # Chuyển dữ liệu sang DataFrame
+    class_distribution = pd.DataFrame(
+        list(class_counter.items()), columns=["Class", "Number of Items"]
+    )
+    class_distribution = class_distribution.sort_values(by="Class").reset_index(drop=True)
+
+    # Log bảng thông tin
+    logger.info("\n" + class_distribution.to_string(index=False))
