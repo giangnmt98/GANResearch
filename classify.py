@@ -216,7 +216,8 @@ def balance_dataset_with_generator(
     device,
     noise_dimension,
     save_path=None,
-    logger=None
+    logger=None,
+    gen_has_label=False,
 ):
     """
     Sử dụng generator để bổ sung dữ liệu cho các class thiểu số và tạo bộ dataset cân bằng.
@@ -224,7 +225,11 @@ def balance_dataset_with_generator(
     Args:
         generator_file (str): Đường dẫn đến file lưu model generator.
         dataloader (DataLoader): DataLoader cung cấp dữ liệu ban đầu (cả ảnh và nhãn).
+        device (str): Thiết bị sử dụng (CPU hoặc GPU).
+        noise_dimension (int): Kích thước vector noise đầu vào của generator.
         save_path (str, optional): Đường dẫn để lưu hình ảnh được sinh (nếu cần).
+        logger (logging.Logger, optional): Logger để ghi log thông tin.
+        gen_has_label (bool): Nếu True, generator yêu cầu nhãn đầu vào.
 
     Returns:
         balanced_dataloader (DataLoader): DataLoader chứa dữ liệu đã được cân bằng.
@@ -241,23 +246,29 @@ def balance_dataset_with_generator(
         for label in labels:
             class_counts[label] = class_counts.get(label, 0) + 1
     max_samples = max(class_counts.values())
+    if logger:
+        logger.info(f"Original class distribution: {class_counts}")
 
     # Tạo dữ liệu bổ sung cho các class thiểu số
     augmented_datasets = []
     for class_idx, count in class_counts.items():
         if count < max_samples:
-            additional_samples = (max_samples - count)
-            logger.info(f"Generating {additional_samples} samples for class {class_idx}...")
+            additional_samples = int((max_samples - count) / 8)  # Tăng tốc độ tạo dữ liệu
+            if logger:
+                logger.info(f"Generating {additional_samples} samples for class {class_idx}...")
 
             # Tạo noise và nhãn
-            # noise = torch.randn(additional_samples, noise_dimension, 1, 1, device=device)
+            noise = torch.randn(additional_samples, noise_dimension, 1, 1, device=device)
             labels = torch.full((additional_samples,), class_idx, dtype=torch.long, device=device)
 
-            # Sinh ảnh
-            generated_images = torch.cat(
-                [generator(torch.randn(1, noise_dimension, 1, 1, device=device)).detach() for _ in range(additional_samples)],
-                dim=0
-            )
+            if gen_has_label:
+                # Sinh ảnh từ generator yêu cầu nhãn
+                generated_images = generator(noise, labels).detach()
+            else:
+                # Sinh ảnh từ generator không yêu cầu nhãn
+                generated_images = generator(noise).detach()
+
+            # Tạo TensorDataset từ ảnh và nhãn sinh
             augmented_dataset = TensorDataset(generated_images.cpu(), labels.cpu())
             augmented_datasets.append(augmented_dataset)
 
@@ -270,25 +281,30 @@ def balance_dataset_with_generator(
     original_dataset = dataloader.dataset
     if augmented_datasets:
         combined_dataset = ConcatDataset([original_dataset, *augmented_datasets])
-        logger.info("Dataset balanced successfully.")
+        if logger:
+            logger.info("Dataset balanced successfully.")
     else:
         combined_dataset = original_dataset
-        logger.info("Dataset was already balanced.")
+        if logger:
+            logger.info("Dataset was already balanced.")
 
+    # Tạo hàm custom_collate_fn để ghép batch dữ liệu
     def custom_collate_fn(batch):
         images, labels = zip(*batch)
-        # Chuyển đổi danh sách ảnh và nhãn thành tensor
         images = torch.stack(images)  # Ghép tensor ảnh
         labels = torch.tensor(labels, dtype=torch.long)  # Chuyển nhãn thành tensor
         return images, labels
 
     # Tạo DataLoader mới
     balanced_dataloader = DataLoader(
-        combined_dataset, batch_size=dataloader.batch_size, shuffle=True, num_workers=dataloader.num_workers, collate_fn=custom_collate_fn,
+        combined_dataset,
+        batch_size=dataloader.batch_size,
+        shuffle=True,
+        num_workers=dataloader.num_workers,
+        collate_fn=custom_collate_fn,
     )
 
     return balanced_dataloader
-
 
 # 1. Định nghĩa model ResNet50Classifier
 class ResNet50Classifier(nn.Module):
@@ -381,7 +397,7 @@ def train_model(
 
 
 # 3. Hàm đánh giá model
-def evaluate_model(model, test_loader, device='cpu', class_names=None, dataset_name="dataset", is_imbalanced=False, make_balance=False):
+def evaluate_model(model, test_loader, generator_file, device='cpu', class_names=None, dataset_name="dataset", is_imbalanced=False, make_balance=False):
     """
     Đánh giá mô hình trên tập test, tính Accuracy, F1-Score tổng thể và từng lớp, tạo biểu đồ và lưu kết quả vào CSV/PNG.
 
@@ -398,8 +414,11 @@ def evaluate_model(model, test_loader, device='cpu', class_names=None, dataset_n
     """
     # Xác định thư mục lưu trữ dựa trên tên dataset và trạng thái cân bằng
     balance_status = "imbalanced" if is_imbalanced else "balanced"
-    make_balance_status = "_make_balance" if make_balance else ""
-    output_dir = os.path.join(f"./results/{dataset_name}_{balance_status}{make_balance_status}")
+    make_balance_status = "make_balance" if make_balance else ""
+    if len(make_balance_status) > 0:
+        output_dir = os.path.join(f"./results/{dataset_name}_{balance_status}_{make_balance_status}/{generator_file[:-4]}")
+    else:
+        output_dir = os.path.join(f"./results/{dataset_name}_{balance_status}")
     os.makedirs(output_dir, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
 
     model.to(device)
@@ -455,7 +474,7 @@ def evaluate_model(model, test_loader, device='cpu', class_names=None, dataset_n
     ))
 
     fig.update_layout(
-        title=f"Accuracy and F1-Score for {dataset_name} ({balance_status.capitalize()})",
+        title=f"Accuracy and F1-Score for {dataset_name} ({balance_status.capitalize()}{make_balance_status.capitalize()})",
         xaxis_title="Class Names",
         yaxis_title="Metric Values",
         barmode="group",
@@ -491,7 +510,7 @@ def evaluate_model(model, test_loader, device='cpu', class_names=None, dataset_n
     }
 
 
-def main(dataset_name, desired_classes, imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=1, lr=0.001):
+def main(dataset_name, generator_file, gen_has_label, desired_classes, imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=1, lr=0.001):
     logger = create_logger()
 
     train_loader, val_loader, test_loader, num_classes, input_channels = load_dataset(
@@ -507,7 +526,6 @@ def main(dataset_name, desired_classes, imbalance_ratios, apply_imbalance=False,
     )
     if make_balance==True and apply_imbalance==True:
         # Đường dẫn tới generator đã lưu
-        generator_file = "./generator_final.pth"
 
         # Cân bằng dataset
         train_loader = balance_dataset_with_generator(
@@ -516,7 +534,8 @@ def main(dataset_name, desired_classes, imbalance_ratios, apply_imbalance=False,
             device="cuda",
             noise_dimension=100,
             save_path="./generated_images",  # Thư mục lưu ảnh sinh
-            logger=logger
+            logger=logger,
+            gen_has_label=gen_has_label
         )
 
         log_class_distribution(train_loader, logger)
@@ -542,7 +561,7 @@ def main(dataset_name, desired_classes, imbalance_ratios, apply_imbalance=False,
 
     # Evaluate model
     logger.info("Evaluating model on test data:")
-    evaluate_model(model, test_loader, dataset_name=dataset_name, device=device, is_imbalanced=apply_imbalance, make_balance=make_balance)
+    evaluate_model(model, test_loader, generator_file=generator_file, dataset_name=dataset_name, device=device, is_imbalanced=apply_imbalance, make_balance=make_balance)
 
 
 # 4. Main pipeline
@@ -562,12 +581,12 @@ if __name__ == "__main__":
         9: 0.01,
     }  # Tạo mất cân bằng
 
+    # main(dataset_name="CIFAR10", desired_classes=desired_classes,
+    #      imbalance_ratios=imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=10
+    #      )
+    # main(dataset_name="CIFAR10", desired_classes=desired_classes,
+    #      imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=False, num_epochs=10
+    #      )
     main(dataset_name="CIFAR10", desired_classes=desired_classes,
-         imbalance_ratios=imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=10
-         )
-    main(dataset_name="CIFAR10", desired_classes=desired_classes,
-         imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=False, num_epochs=10
-         )
-    main(dataset_name="CIFAR10", desired_classes=desired_classes,
-         imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=True, num_epochs=10
-         )
+         imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=True, num_epochs=10,
+         generator_file="dcGAN_Generator.pth", gen_has_label=False)
