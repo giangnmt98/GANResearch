@@ -253,7 +253,7 @@ def balance_dataset_with_generator(
     augmented_datasets = []
     for class_idx, count in class_counts.items():
         if count < max_samples:
-            additional_samples = int((max_samples - count) / 8)  # Tăng tốc độ tạo dữ liệu
+            additional_samples = int((max_samples - count) / 2)  # Tăng tốc độ tạo dữ liệu
             if logger:
                 logger.info(f"Generating {additional_samples} samples for class {class_idx}...")
 
@@ -458,19 +458,55 @@ def evaluate_model(model, test_loader, generator_file, device='cpu', class_names
         "f1_score": overall_f1
     })
 
-    # Tạo biểu đồ Acc và F1-Score
-    class_names_list = [m["class_name"] for m in class_metrics]
-    accuracies = [m["accuracy"] for m in class_metrics]
-    f1_scores = [m["f1_score"] for m in class_metrics]
+    return class_metrics, output_dir
+
+def save_metrics_to_csv(df, output_dir):
+    """
+    Lưu các chỉ số đánh giá vào file CSV.
+
+    Args:
+        df: Danh sách các chỉ số đánh giá từng lớp.
+        output_dir (str): Thư mục lưu file CSV.
+
+    Returns:
+        str: Đường dẫn đến file CSV đã lưu.
+    """
+    os.makedirs(output_dir, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+    csv_path = os.path.join(output_dir, "evaluation_metrics.csv")
+
+    df.to_csv(csv_path, index=False)
+
+    print(f"Saved evaluation metrics to {csv_path}")
+
+
+def create_metrics_chart(df, output_dir, dataset_name="dataset", balance_status="balanced", make_balance_status=""):
+    """
+    Tạo biểu đồ Accuracy và F1-Score cho từng lớp.
+
+    Args:
+        class_metrics (list): Danh sách các chỉ số đánh giá từng lớp.
+        output_dir (str): Thư mục lưu biểu đồ.
+        dataset_name (str): Tên dataset.
+        balance_status (str): Trạng thái cân bằng dữ liệu.
+        make_balance_status (str): Trạng thái xử lý cân bằng.
+
+    Returns:
+        str: Đường dẫn đến file biểu đồ đã lưu.
+    """
+    os.makedirs(output_dir, exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+
+    # class_names_list = [m["class_name"] for m in class_metrics]
+    # accuracies = [m["acc_mean"] for m in class_metrics]
+    # f1_scores = [m["f1_mean"] for m in class_metrics]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=class_names_list, y=accuracies, name="Accuracy",
-        text=[f"{v:.2f}" for v in accuracies], textposition='outside'
+        x=df["class_name"], y=df["acc_mean"], name="Accuracy",
+        text=[f"{v:.2f}" for v in df["acc_mean"]], textposition='outside'
     ))
     fig.add_trace(go.Bar(
-        x=class_names_list, y=f1_scores, name="F1-Score",
-        text=[f"{v:.2f}" for v in f1_scores], textposition='outside'
+        x=df["class_name"], y=df["f1_mean"], name="F1-Score",
+        text=[f"{v:.2f}" for v in df["f1_mean"]], textposition='outside'
     ))
 
     fig.update_layout(
@@ -480,42 +516,17 @@ def evaluate_model(model, test_loader, generator_file, device='cpu', class_names
         barmode="group",
         legend=dict(title="Metrics")
     )
+
     chart_path = os.path.join(output_dir, "metrics_chart.html")
     fig.write_html(chart_path)
-    logger.info(f"Saved metrics chart to {chart_path}")
+    print(f"Saved metrics chart to {chart_path}")
 
-    # Lưu biểu đồ dưới dạng PNG
-    # chart_path = os.path.join(output_dir, "metrics_chart.png")
-    # fig.write_image(chart_path, format="png")
-    # logger.info(f"Saved metrics chart as PNG to {chart_path}")
-
-    # Lưu kết quả vào CSV
-    csv_path = os.path.join(output_dir, "evaluation_metrics.csv")
-    with open(csv_path, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        # Ghi header
-        writer.writerow(["class", "acc", "f1"])
-        # Ghi giá trị từng lớp
-        for m in class_metrics:
-            writer.writerow([m["class_name"], m["accuracy"], m["f1_score"]])
-
-    logger.info(f"Saved evaluation metrics to {csv_path}")
-
-    return {
-        "overall_accuracy": overall_accuracy,
-        "overall_f1": overall_f1,
-        "per_class_metrics": class_metrics,
-        "chart_path": chart_path,
-        "csv_path": csv_path
-    }
-
-
-def main(dataset_name, generator_file, gen_has_label, desired_classes, imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=1, lr=0.001):
+def main(dataset_name, data_dir, generator_file, gen_has_label, desired_classes, imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=1, lr=0.001):
     logger = create_logger()
 
     train_loader, val_loader, test_loader, num_classes, input_channels = load_dataset(
         dataset_name=dataset_name,  # Hoặc 'CIFAR10', 'ImageFolder'
-        data_dir="./data",
+        data_dir=data_dir,
         batch_size=64,
         split_ratios=(0.7, 0.1, 0.2),
         imbalance_ratios=imbalance_ratios,
@@ -561,32 +572,100 @@ def main(dataset_name, generator_file, gen_has_label, desired_classes, imbalance
 
     # Evaluate model
     logger.info("Evaluating model on test data:")
-    evaluate_model(model, test_loader, generator_file=generator_file, dataset_name=dataset_name, device=device, is_imbalanced=apply_imbalance, make_balance=make_balance)
+    results, output_dir = evaluate_model(model, test_loader, generator_file=generator_file, dataset_name=dataset_name, device=device, is_imbalanced=apply_imbalance, make_balance=make_balance)
+    return results, output_dir
 
+
+def process_metrics(df_results, save_dir):
+    results = df_results.groupby("class_name").agg(
+        acc_mean=("accuracy", "mean"),
+        acc_se=("accuracy", sem),  # Standard error of accuracy
+        f1_mean=("f1_score", "mean"),
+        f1_se=("f1_score", sem)  # Standard error of f1
+    ).reset_index()
+
+    save_metrics_to_csv(results, save_dir)
+    return results
+
+def run_main_for_iterations(num_iterations, dataset, data_directory, apply_imbalance, balance, desired_classes, imbalance_ratios, generator_file, gen_has_label):
+    output_dir = None
+    results_list = []
+
+    for _ in range(num_iterations):
+        result, output_dir = main(
+            dataset_name=dataset,
+            data_dir=data_directory,
+            desired_classes=desired_classes,
+            imbalance_ratios=imbalance_ratios,
+            apply_imbalance=apply_imbalance,
+            make_balance=balance,
+            num_epochs=10,
+            generator_file=generator_file,
+            gen_has_label=gen_has_label
+        )
+        tmp_df = pd.DataFrame(result)
+        results_list.append(tmp_df)
+
+    combined_results = pd.concat(results_list)
+    return combined_results, output_dir
 
 # 4. Main pipeline
 if __name__ == "__main__":
     # Load dataset
     desired_classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # Lọc lớp mong muốn
-    imbalance_ratios = {
-        0: 1,
-        1: 1,
-        2: 1,
-        3: 0.5,
-        4: 0.4,
-        5: 0.3,
-        6: 0.3,
-        7: 0.05,
-        8: 0.01,
-        9: 0.01,
-    }  # Tạo mất cân bằng
 
-    # main(dataset_name="CIFAR10", desired_classes=desired_classes,
-    #      imbalance_ratios=imbalance_ratios, apply_imbalance=False, make_balance=False, num_epochs=10
-    #      )
-    # main(dataset_name="CIFAR10", desired_classes=desired_classes,
-    #      imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=False, num_epochs=10
-    #      )
-    main(dataset_name="CIFAR10", desired_classes=desired_classes,
-         imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=True, num_epochs=10,
-         generator_file="dcGAN_Generator.pth", gen_has_label=False)
+    # imbalance_ratios = {
+    #     0: 1,
+    #     1: 1,
+    #     2: 1,
+    #     3: 0.5,
+    #     4: 0.4,
+    #     5: 0.3,
+    #     6: 0.3,
+    #     7: 0.1,
+    #     8: 0.1,
+    #     9: 0.1,
+    # }  # Tạo mất cân bằng cho custom data
+
+    from scipy.stats import sem  # Import hàm tính sai số chuẩn
+    import pandas as pd
+
+    # Parameters
+    # DATASET_NAME = "ImageFolder"
+    # DATA_DIR = "data/Stanford Dogs Dataset"
+    DATASET_NAME = "ImageFolder"
+    DATA_DIR = "data/Stanford Dogs Dataset"
+    APPLY_IMBALANCE = True
+    MAKE_BALANCE = True
+    DESIRED_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]   # This should be defined
+    IMBALANCE_RATIOS = {
+           0: 1,
+           1: 1,
+           2: 1,
+           3: 0.5,
+           4: 0.4,
+           5: 0.3,
+           6: 0.3,
+           7: 0.1,
+           8: 0.1,
+           9: 0.1,
+    }  # This should be defined
+
+    # Run main
+    df_results, output_dir = run_main_for_iterations(5, DATASET_NAME, DATA_DIR, APPLY_IMBALANCE, MAKE_BALANCE,
+                                                     DESIRED_CLASSES, IMBALANCE_RATIOS, generator_file="experiments/cgan/standford_dogs/balance/non_lc/20241127_173522/generator_final.pth", gen_has_label=True)
+    # df_results, output_dir = run_main_for_iterations(5, DATASET_NAME, DATA_DIR, APPLY_IMBALANCE, MAKE_BALANCE,
+    #                                                  DESIRED_CLASSES, IMBALANCE_RATIOS,
+    #                                                  generator_file=None,
+    #                                                  gen_has_label=False)
+    # Process metrics
+    processed_results = process_metrics(df_results, output_dir)
+
+    # Create metrics chart
+    balance_status = "imbalanced" if APPLY_IMBALANCE else "balanced"
+    create_metrics_chart(processed_results, output_dir, dataset_name=DATASET_NAME, balance_status=balance_status)
+
+
+    # main(dataset_name="ImageFolder", data_dir= "data/Stanford Dogs Dataset", desired_classes=desired_classes,
+    #      imbalance_ratios=imbalance_ratios, apply_imbalance=True, make_balance=True, num_epochs=10,
+    #      generator_file="experiments/dcgan/standford_dogs/balance/lc_0.3/20241127_161530/generator_final.pth", gen_has_label=False)

@@ -18,7 +18,7 @@ venv:
 	$(PYTHON_EXEC) -m venv $(VENV_DIR) && \
 	source $(VENV_DIR)/bin/activate && \
 	$(PYTHON_EXEC) -m pip install --upgrade pip setuptools wheel && \
-	$(PYTHON_EXEC) -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+	$(PYTHON_EXEC) -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu122 && \
  	$(PYTHON_EXEC) -m pip install -e .[dev]
 
 # Code stylingso

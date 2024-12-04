@@ -143,26 +143,26 @@ class BaseTrainer:
             self.disc_loss_history.append(disc_loss)
 
             # Early stopping logic based on FID
-            if early_stop:
-                fid_score = run_eval_on_train(
-                    config=self.config,
-                    generator=self.model.generator,
-                    dataloader=self.val_loader,
-                    has_labels=False,
-                )
-                logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
-
-                if fid_score < best_fid:
-                    best_fid = fid_score
-                    no_improvement_count = 0  # Reset if improvement occurs
-                else:
-                    no_improvement_count += 1
-                    logger.info(
-                        f"No improvement in FID for {no_improvement_count} epoch(s)."
-                    )
-                    if no_improvement_count >= patience:
-                        logger.info("Early stopping triggered due to FID.")
-                        break
+            # if early_stop:
+            #     fid_score = run_eval_on_train(
+            #         config=self.config,
+            #         generator=self.model.generator,
+            #         dataloader=self.val_loader,
+            #         has_labels=False,
+            #     )
+            #     logger.info(f"FID Score at Epoch {epoch}: {fid_score:.4f}")
+            #
+            #     if fid_score < best_fid:
+            #         best_fid = fid_score
+            #         no_improvement_count = 0  # Reset if improvement occurs
+            #     else:
+            #         no_improvement_count += 1
+            #         logger.info(
+            #             f"No improvement in FID for {no_improvement_count} epoch(s)."
+            #         )
+            #         if no_improvement_count >= patience:
+            #             logger.info("Early stopping triggered due to FID.")
+            #             break
 
             # Save model every 'save_interval' epochs
             if epoch % self.config["training"].get("save_interval", 100) == 0:

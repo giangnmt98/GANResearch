@@ -8,9 +8,11 @@ import random
 from collections import defaultdict
 
 import torch
+
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets
-
+from tqdm import tqdm
 from ganresearch.utils.utils import create_logger
 
 # Initialize the logger with the application name
@@ -312,57 +314,28 @@ class StandfordDogsDataset(BaseDataLoaderConfig):
         self.dataset = self.initialize_dataset()
 
     def initialize_dataset(self):
-        return self.select_class_id(
-            DataLoader(self.dataset, batch_size=self.batch_size, shuffle=self.shuffle)
-        )
+        return self.select_class_id(self.dataset)
 
     def load_dataset(self):
         """
-        Load the dataset from a .pt file.
-
+        Load the dataset using ImageFolder.
         Raises:
-            FileNotFoundError: If the specified .pt file does not exist.
-            ValueError: If the data format is not compatible.
+            FileNotFoundError: If the specified data_path does not exist.
         """
         if not os.path.exists(self.data_path):
             raise FileNotFoundError(f"{self.data_path} does not exist.")
+        import torchvision.transforms as transforms
 
-        # Load data from the .pt file
-        self.data = torch.load(self.data_path)
+        # Define transformations for the images
+        transform = transforms.Compose([
+            transforms.Resize((64 , 64)),  # Resize images to a fixed size
+            transforms.ToTensor(),  # Convert images to PyTorch tensors
+        ])
+
+        # Load data from the directory using ImageFolder
+        self.dataset = datasets.ImageFolder(root=self.data_path, transform=transform)
         logger.info(f"Dataset loaded from {self.data_path}")
 
-        # Define TensorDataset inline to wrap the loaded data
-        class TensorDataset(Dataset):
-            def __init__(self, data):
-                self.images = data["images"]
-                self.labels = data["labels"]
-
-            def __len__(self):
-                return len(self.labels)
-
-            def __getitem__(self, idx):
-                return self.images[idx], self.labels[idx]
-
-        # Create and return a DataLoader
-        tensor_dataset = TensorDataset(self.data)
-        self.dataset = tensor_dataset
-
-        # Verify the structure of the data
-        if (
-            isinstance(self.data, dict)
-            and "images" in self.data
-            and "labels" in self.data
-        ):
-            if not isinstance(self.data["images"], torch.Tensor) or not isinstance(
-                self.data["labels"], torch.Tensor
-            ):
-                raise ValueError(
-                    "Data should contain 'images' and 'labels' as torch tensors."
-                )
-        else:
-            raise ValueError(
-                "Unsupported data format. Expected a dictionary with 'images' and 'labels' keys."
-            )
 
     def get_dataloader(self):
         """
@@ -385,3 +358,5 @@ class StandfordDogsDataset(BaseDataLoaderConfig):
         if self.dataset is None:
             self.load_dataset()
         return len(self.dataset)
+
+
